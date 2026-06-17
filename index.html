@@ -216,10 +216,12 @@
     border-radius:14px;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.6);}
   .fb-head{font-size:15px;font-weight:700;color:#fff;}
   .fb-ctx{margin-top:6px;font-size:12px;color:var(--probe);font-weight:600;}
-  .fb-types{display:flex;gap:6px;margin:14px 0;}
-  .fb-types button{flex:1;background:var(--card-2);border:1px solid var(--line);color:var(--soft);
-    font-size:12px;font-weight:600;padding:7px;border-radius:8px;cursor:pointer;font-family:inherit;transition:.12s;}
-  .fb-types button.active{background:var(--probe);border-color:var(--probe);color:#161617;}
+  /* Ghost "add a block" cards — propose a new block at the end of a series */
+  .card.add{border:1.5px dashed var(--line);background:transparent;box-shadow:none;
+    color:var(--muted);display:flex;align-items:center;justify-content:center;
+    min-height:46px;font-size:12.5px;font-weight:600;text-align:center;}
+  .card.add:hover{border-color:var(--probe);color:var(--probe);box-shadow:none;transform:translateY(-1px);}
+  .card.add .add-inner{padding:6px 10px;}
   .fb-modal textarea{width:100%;min-height:96px;resize:vertical;background:var(--bg);
     border:1px solid var(--line);border-radius:8px;color:var(--text);font-family:inherit;
     font-size:13px;line-height:1.5;padding:10px;}
@@ -411,6 +413,37 @@ OPENERS.forEach(op=>{
   root.children.push(o);
 });
 
+/* ---- "Add a block" placeholders (shared by all four modules) ---- */
+/* Appends one ghost "add" node to the end of every series of sibling  */
+/* blocks so reps can propose a new block. Click is handled by the      */
+/* feedback module. Built once; never part of saved content.           */
+function addLabel(parentType, lastChildType){
+  switch(lastChildType){
+    case 'opener':    return 'Propose a new opener';
+    case 'response':  return 'Add a prospect response';
+    case 'track':     return 'Propose a new track';
+    case 'qcard':     return 'Propose a new question';
+    case 'objection': return 'Propose a new objection';
+    case 'ask':       return 'Propose a new ask';
+    case 'scenario':  return 'Propose a new scenario';
+    case 'move':
+      if(parentType==='response') return 'Add a follow-up move';
+      if(parentType==='objection') return 'Add a response or example';
+      if(parentType==='ask')       return 'Add a phrasing';
+      if(parentType==='scenario')  return 'Add a step or note';
+      return 'Add another';
+    default: return 'Add new';
+  }
+}
+function addPlaceholders(n, make){
+  if(n.children && n.children.length){
+    n.children.forEach(c=>addPlaceholders(c, make));
+    const ref = n.children[n.children.length-1];
+    n.children.push(make({ type:'add', accent:'#7C7C7C', addlabel: addLabel(n.type, ref.type) }));
+  }
+}
+addPlaceholders(root, node);
+
 /* ============================== LAYOUT CONSTANTS ============================== */
 const CARD_W = 272;
 const COL_W  = 372;   // horizontal column pitch
@@ -442,7 +475,7 @@ function makeCard(n){
   el.className = 'card ' + n.type + (n.probe?' probe':'') +
                  (n.children.length?' has':'');
   el.style.setProperty('--accent', n.accent);
-  const kids = n.children.length;
+  const kids = n.children.filter(c=>c.type!=='add').length;
 
   if(n.type==='start'){
     el.innerHTML = `<div class="big">📞 Call Start</div>
@@ -463,6 +496,9 @@ function makeCard(n){
         ${kids?`<span class="pill">${n.expanded?'▾':'▸ '+kids}</span>`:''}
       </div>
       <div class="body">${n.text}</div>`;
+  } else if(n.type==='add'){
+    el.dataset.add = n.addlabel;
+    el.innerHTML = `<div class="add-inner">+ ${n.addlabel}</div>`;
   } else { // move / probe
     el.innerHTML = `
       <div class="top"><span class="label">${n.probe?'Probe':'Your move'}</span></div>
@@ -734,6 +770,7 @@ const Midgame = (function(){
     });
     root.children.push(tn);
   });
+  addPlaceholders(root, mk);
 
   /* ---- DOM + constants ---- */
   const V=document.getElementById('viewportMid');
@@ -750,7 +787,7 @@ const Midgame = (function(){
     const el=document.createElement('div');
     el.className='card '+ n.type + (n.children.length?' has':'');
     el.style.setProperty('--accent', n.accent);
-    const kids=n.children.length;
+    const kids=n.children.filter(c=>c.type!=='add').length;
 
     if(n.type==='start'){
       el.innerHTML=`<div class="big">🔎 Midgame · Discovery</div>
@@ -763,6 +800,9 @@ const Midgame = (function(){
           ${kids?`<span class="pill">${n.expanded?'▾':'▸ '+kids}</span>`:''}
         </div>
         <div class="usewhen">${n.subtitle}</div>`;
+    } else if(n.type==='add'){
+      el.dataset.add=n.addlabel;
+      el.innerHTML=`<div class="add-inner">+ ${n.addlabel}</div>`;
     } else { // qcard (leaf)
       const says=n.phrasings.map(p=>
         `<div class="qsay">${p.say}${p.hint?`<span class="qhint">${p.hint}</span>`:''}</div>`
@@ -1058,6 +1098,7 @@ const Objections = (function(){
     if(o.fail)    on.children.push(mk({type:'move',accent:'#FEAF0E',probe:true,label:'Failure mode',text:o.fail}));
     root.children.push(on);
   });
+  addPlaceholders(root, mk);
 
   /* ---- DOM + constants ---- */
   const V=document.getElementById('viewportObj');
@@ -1072,7 +1113,7 @@ const Objections = (function(){
 
   function makeCard(n){
     const el=document.createElement('div');
-    const kids=n.children.length;
+    const kids=n.children.filter(c=>c.type!=='add').length;
     if(n.type==='start'){
       el.className='card start';
       el.innerHTML=`<div class="big">🛡️ Objection Handling</div>
@@ -1088,6 +1129,10 @@ const Objections = (function(){
         </div>
         <div class="objfreq">${n.freq}</div>
         <div class="objtiming"><b>When:</b> ${n.timing}</div>`;
+    } else if(n.type==='add'){
+      el.className='card add';
+      el.dataset.add=n.addlabel;
+      el.innerHTML=`<div class="add-inner">+ ${n.addlabel}</div>`;
     } else { // move: handling steps, example, insight, or failure-mode probe
       el.className='card move'+(n.probe?' probe':'');
       el.style.setProperty('--accent',n.accent);
@@ -1353,6 +1398,7 @@ const Closing = (function(){
     t2.children.push(sn);
   });
   root.children.push(t2);
+  addPlaceholders(root, mk);
 
   /* ---- DOM + constants ---- */
   const V=document.getElementById('viewportClose');
@@ -1366,7 +1412,7 @@ const Closing = (function(){
 
   function makeCard(n){
     const el=document.createElement('div');
-    const kids=n.children.length;
+    const kids=n.children.filter(c=>c.type!=='add').length;
     const pill = kids?`<span class="pill">${n.expanded?'▾':'▸ '+kids}</span>`:'';
     if(n.type==='start'){
       el.className='card start';
@@ -1390,6 +1436,10 @@ const Closing = (function(){
       el.innerHTML=`
         <div class="top"><span class="label">${n.tag}</span>${pill}</div>
         <div class="scentitle">${n.title}</div>`;
+    } else if(n.type==='add'){
+      el.className='card add';
+      el.dataset.add=n.addlabel;
+      el.innerHTML=`<div class="add-inner">+ ${n.addlabel}</div>`;
     } else { // move: steps, phrasing/text, readiness list, insight, or failure probe
       el.className='card move'+(n.probe?' probe':'');
       el.style.setProperty('--accent',n.accent);
@@ -1596,14 +1646,9 @@ const Closing = (function(){
   document.body.insertAdjacentHTML('beforeend', `
     <div class="fb-overlay" id="fbOverlay" hidden>
       <div class="fb-modal">
-        <div class="fb-head">Suggest an edit · leave feedback</div>
+        <div class="fb-head" id="fbHead">Leave a comment</div>
         <div class="fb-ctx" id="fbCtx"></div>
-        <div class="fb-types" id="fbTypes">
-          <button type="button" data-t="Suggest edit" class="active">Suggest edit</button>
-          <button type="button" data-t="Add new">Add new</button>
-          <button type="button" data-t="Comment">Comment</button>
-        </div>
-        <textarea id="fbText" placeholder="What would you change, add, or flag? Be specific."></textarea>
+        <textarea id="fbText" placeholder="Share a comment, edit, or suggestion. Be specific."></textarea>
         <input id="fbRep" placeholder="Your name" />
         <div class="fb-actions">
           <button type="button" id="fbCancel" class="fb-btn-ghost">Cancel</button>
@@ -1616,23 +1661,28 @@ const Closing = (function(){
   `);
 
   const overlay=document.getElementById('fbOverlay');
+  const headEl=document.getElementById('fbHead');
   const ctxEl=document.getElementById('fbCtx');
-  const typesEl=document.getElementById('fbTypes');
   const textEl=document.getElementById('fbText');
   const repEl=document.getElementById('fbRep');
   const noteEl=document.getElementById('fbNote');
   const toast=document.getElementById('fbToast');
-  let cur={tab:'',card:''}, type='Suggest edit';
+  let cur={tab:'',card:''}, type='Comment';
 
   repEl.value = localStorage.getItem('gw_fb_rep') || '';
 
-  typesEl.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
-    type=b.dataset.t; [...typesEl.children].forEach(x=>x.classList.toggle('active',x===b)); });
-
-  function open(ctx){ cur=ctx; type='Suggest edit';
-    [...typesEl.children].forEach((x,i)=>x.classList.toggle('active',i===0));
+  // mode: 'comment' (from a card's 💬) or 'add' (from a "+ Add a block" card)
+  function open(ctx){
+    cur=ctx;
+    const isAdd = ctx.mode==='add';
+    type = isAdd ? 'New block' : 'Comment';
+    headEl.textContent = isAdd ? 'Propose a new block' : 'Leave a comment';
+    textEl.placeholder = isAdd
+      ? "Describe the new block you'd like to add — and what it should say."
+      : 'Share a comment, edit, or suggestion. Be specific.';
     ctxEl.textContent = ctx.tab + (ctx.card?'  ·  '+ctx.card:'');
-    textEl.value=''; noteEl.textContent=''; overlay.hidden=false; setTimeout(()=>textEl.focus(),30); }
+    textEl.value=''; noteEl.textContent=''; overlay.hidden=false; setTimeout(()=>textEl.focus(),30);
+  }
   function close(){ overlay.hidden=true; }
 
   document.getElementById('fbCancel').onclick=close;
@@ -1674,6 +1724,7 @@ const Closing = (function(){
   function decorate(){
     document.querySelectorAll('#cards .card, #cardsMid .card, #cardsObj .card, #cardsClose .card').forEach(card=>{
       if(card.classList.contains('start')) return;     // skip navigation-only cards
+      if(card.classList.contains('add')) return;        // ghost "add a block" cards click themselves
       if(card.querySelector('.fbbtn')) return;
       const btn=document.createElement('button'); btn.type='button'; btn.className='fbbtn';
       btn.title='Suggest an edit or leave a comment'; btn.innerHTML=CHAT;
@@ -1687,13 +1738,22 @@ const Closing = (function(){
   });
   decorate();
 
-  // capture phase so the feedback button never triggers a card expand/collapse
+  // capture phase so feedback clicks never trigger a card expand/collapse
+  const tabOf = el => TAB_BY_CONTAINER[(el.closest('#cards,#cardsMid,#cardsObj,#cardsClose')||{}).id]||'';
   document.addEventListener('click',e=>{
-    const b=e.target.closest('.fbbtn'); if(!b) return;
+    // "+ Add a block" ghost card → propose-a-new-block composer
+    const addCard=e.target.closest('.card.add');
+    if(addCard){
+      e.stopPropagation(); e.preventDefault();
+      open({ tab: tabOf(addCard), card: addCard.dataset.add||'New block', mode:'add' });
+      return;
+    }
+    // per-card 💬 button → comment composer
+    const b=e.target.closest('.fbbtn');
+    if(!b) return;
     e.stopPropagation(); e.preventDefault();
     const card=b.closest('.card');
-    const cont=b.closest('#cards,#cardsMid,#cardsObj,#cardsClose');
-    open({ tab: TAB_BY_CONTAINER[cont&&cont.id]||'', card:(card&&card.dataset.fb)||'' });
+    open({ tab: tabOf(b), card:(card&&card.dataset.fb)||'', mode:'comment' });
   }, true);
 })();
 </script>
