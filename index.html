@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GovWell · BD Cold Call Tree</title>
+<style>
+  :root{
+    /* GovWell brand neutrals — Jet Black / Slate / Concrete / Cement / Base */
+    --bg:#0c0c0d;        /* near Jet Black */
+    --card:#161617;      /* Slate-ish surface */
+    --card-2:#1f1f21;
+    --line:#2d2d30;
+    --text:#ECECEC;      /* Base */
+    --muted:#7C7C7C;     /* Concrete */
+    --soft:#B1B1B1;      /* Cement */
+    --probe:#FEAF0E;     /* Hope — brand hero accent */
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);
+    /* GT Standard is the brand typeface; fall back to a neo-grotesque stack */
+    font-family:'GT Standard','Helvetica Neue',Helvetica,Arial,sans-serif;
+    color:var(--text);}
+
+  /* ---- Toolbar ---- */
+  #bar{position:fixed;top:0;left:0;right:0;height:54px;z-index:100;
+    display:flex;align-items:center;gap:14px;padding:0 18px;
+    background:#121214;
+    border-bottom:1px solid var(--line);}
+  #bar .brand{display:flex;align-items:center;font-weight:700;letter-spacing:.2px;font-size:15px;}
+  #bar .brand .wm{color:#fff;}
+  #bar .brand .flagmark{margin:0 9px 0 7px;display:inline-flex;}
+  #bar .brand .bsep{color:var(--muted);font-weight:400;margin-right:7px;}
+  #bar .brand .btag{color:var(--muted);font-weight:600;}
+  #bar .sub{color:var(--muted);font-size:12px;}
+  #bar .spacer{flex:1;}
+  .btn{background:var(--card-2);border:1px solid var(--line);color:var(--soft);
+    font-size:12px;font-weight:600;padding:7px 11px;border-radius:7px;cursor:pointer;
+    transition:.12s;white-space:nowrap;}
+  .btn:hover{background:#2a2a2d;color:#fff;border-color:#3d3d40;}
+  .btn.icon{padding:7px 10px;min-width:34px;text-align:center;}
+
+  /* ---- Canvas ---- */
+  #viewport{position:absolute;inset:54px 0 0 0;overflow:hidden;cursor:grab;
+    background-color:var(--bg);
+    background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size:26px 26px;}
+  #viewport.panning{cursor:grabbing;}
+  #world{position:absolute;top:0;left:0;transform-origin:0 0;}
+  #links{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;}
+  #cards{position:absolute;top:0;left:0;}
+
+  /* ---- Cards ---- */
+  .card{position:absolute;width:272px;background:var(--card);
+    border:1px solid var(--line);border-left:4px solid var(--accent,#475160);
+    border-radius:11px;padding:12px 14px;cursor:pointer;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);transition:border-color .12s,box-shadow .12s,transform .12s;
+    user-select:text;}
+  .card:hover{box-shadow:0 8px 24px rgba(0,0,0,.5);transform:translateY(-1px);}
+  .card .top{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+  .card .label{font-size:10.5px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;
+    color:var(--accent,#7d8794);}
+  .card .num{font-size:10.5px;font-weight:800;color:#fff;background:var(--accent,#475160);
+    border-radius:5px;padding:2px 6px;letter-spacing:.5px;}
+  .card .title{font-size:14px;font-weight:700;color:#fff;}
+  .card .pill{margin-left:auto;font-size:11px;font-weight:700;color:var(--muted);
+    background:var(--card-2);border:1px solid var(--line);border-radius:20px;
+    padding:2px 9px;white-space:nowrap;}
+  .card.has:hover .pill{color:#fff;border-color:var(--accent,#3a4450);}
+  .card .usewhen{font-size:11.5px;color:var(--muted);font-style:italic;margin-bottom:8px;
+    line-height:1.4;}
+  .card .body{font-size:12.5px;line-height:1.5;color:var(--soft);}
+  .card .body.script{color:#dbe4ee;}
+
+  /* node-type tints */
+  .card.start{width:200px;text-align:center;background:#11202e;border-color:#1f3a52;border-left-color:#41AAEB;}
+  .card.start .big{font-size:15px;font-weight:800;color:#fff;}
+  .card.start .hint{font-size:11px;color:var(--muted);margin-top:4px;}
+  .card.response{background:var(--card-2);}
+  .card.move .label{color:#39C25E;}
+  .card.move.probe{border-left-style:dashed;}
+  .card.move.probe .label{color:var(--probe);}
+
+  .legend{position:fixed;bottom:14px;left:18px;z-index:15;font-size:11.5px;color:var(--muted);
+    background:#121214;border:1px solid var(--line);border-radius:8px;padding:7px 11px;}
+  .legend b{color:var(--soft);font-weight:600;}
+
+  /* ===================== MIDGAME ADDITIONS ===================== */
+  /* ---- Tabs (match header) ---- */
+  #bar .tabs{display:flex;gap:4px;}
+  .tab{background:transparent;border:1px solid transparent;color:var(--muted);
+    font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer;
+    font-family:inherit;transition:.12s;}
+  .tab:hover{color:var(--soft);background:var(--card-2);}
+  .tab.active{color:#fff;background:var(--card-2);border-color:var(--line);}
+  .ctls{display:flex;align-items:center;gap:14px;}
+
+  /* ---- Midgame canvas (mirrors #viewport) ---- */
+  #viewportMid{position:absolute;inset:54px 0 0 0;overflow:hidden;cursor:grab;
+    background-color:var(--bg);
+    background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size:26px 26px;}
+  #viewportMid.panning{cursor:grabbing;}
+  #worldMid{position:absolute;top:0;left:0;transform-origin:0 0;}
+  #linksMid{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;}
+  #cardsMid{position:absolute;top:0;left:0;}
+
+  /* ---- Midgame question cards ---- */
+  .card.qcard .label{color:var(--accent,#41AAEB);font-size:13px;letter-spacing:.3px;
+    text-transform:none;font-weight:800;}
+  .card.qcard .flag{margin-left:auto;font-size:9.5px;font-weight:800;letter-spacing:.6px;
+    color:#0d1117;background:var(--probe);border-radius:20px;padding:3px 8px;text-transform:uppercase;}
+  .qsay{font-size:12.5px;line-height:1.5;color:#dbe4ee;margin-bottom:8px;
+    padding-left:10px;border-left:2px solid var(--accent,#39C25E);}
+  .qsay:last-of-type{margin-bottom:0;}
+  .qhint{display:block;margin-top:3px;font-size:11px;color:var(--muted);font-style:italic;}
+  .qnote{font-size:11.5px;color:var(--muted);font-style:italic;line-height:1.45;
+    margin-top:9px;border-top:1px solid var(--line);padding-top:8px;}
+
+  /* ---- Midgame sequencing reference card (static, does NOT expand) ---- */
+  .card.refcard{width:300px;cursor:default;background:#1b1810;
+    border:1px dashed var(--probe);border-left:4px solid var(--probe);}
+  .card.refcard:hover{transform:none;box-shadow:0 6px 18px rgba(0,0,0,.35);}
+  .card.refcard .label{color:var(--probe);}
+  .card.refcard ol{margin:4px 0 0;padding-left:20px;}
+  .card.refcard li{font-size:12px;line-height:1.65;color:var(--soft);}
+  .card.refcard .dim{color:var(--muted);}
+  .card.refcard .avoid{margin-top:10px;font-size:11.5px;color:var(--muted);
+    border-top:1px solid var(--line);padding-top:8px;}
+  .card.refcard .avoid b{color:var(--probe);}
+
+  /* ===================== OBJECTIONS ADDITIONS ===================== */
+  /* ---- Objections canvas (mirrors #viewport) ---- */
+  #viewportObj{position:absolute;inset:54px 0 0 0;overflow:hidden;cursor:grab;
+    background-color:var(--bg);
+    background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size:26px 26px;}
+  #viewportObj.panning{cursor:grabbing;}
+  #worldObj{position:absolute;top:0;left:0;transform-origin:0 0;}
+  #linksObj{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;}
+  #cardsObj{position:absolute;top:0;left:0;}
+
+  /* ---- Objection nodes (muted red — "handle with care") ---- */
+  .card.objection{background:#1a0f0f;border-color:#8b3a3a;border-left-color:#8b3a3a;}
+  .card.objection .num{background:#8b3a3a;}
+  .card.objection .title{color:#fff;}
+  .objfreq{font-size:11px;font-weight:700;color:#e08a8a;margin-bottom:6px;letter-spacing:.2px;}
+  .objtiming{font-size:11.5px;color:var(--muted);font-style:italic;line-height:1.4;}
+  .objtiming b{color:var(--soft);font-style:normal;font-weight:600;}
+
+  /* ---- Numbered handling steps + example outcomes inside move cards ---- */
+  .card.move ol{margin:4px 0 0;padding-left:18px;}
+  .card.move li{font-size:12px;line-height:1.55;color:var(--soft);margin-bottom:5px;}
+  .card.move li:last-child{margin-bottom:0;}
+  .exoutcome{margin-top:7px;font-size:11.5px;color:var(--muted);font-style:italic;line-height:1.4;}
+
+  /* ---- Objections master-principle reference card ---- */
+  .card.refcard .refbody{font-size:12.5px;line-height:1.55;color:var(--soft);margin-top:2px;}
+  .card.refcard .refflow{margin-top:8px;font-size:12px;font-weight:700;color:var(--probe);line-height:1.5;}
+
+  /* ===================== CLOSING ADDITIONS ===================== */
+  /* ---- Closing canvas (mirrors #viewport) ---- */
+  #viewportClose{position:absolute;inset:54px 0 0 0;overflow:hidden;cursor:grab;
+    background-color:var(--bg);
+    background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size:26px 26px;}
+  #viewportClose.panning{cursor:grabbing;}
+  #worldClose{position:absolute;top:0;left:0;transform-origin:0 0;}
+  #linksClose{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;}
+  #cardsClose{position:absolute;top:0;left:0;}
+
+  /* ---- Track 1 "ask" cards (frequency + conversion shown inline) ---- */
+  .card.ask .num{background:var(--accent,#41AAEB);}
+  .askmeta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:7px;}
+  .freqchip{font-size:10px;font-weight:700;letter-spacing:.3px;color:var(--muted);
+    background:var(--card-2);border:1px solid var(--line);border-radius:20px;padding:2px 8px;}
+  .convchip{font-size:10px;font-weight:800;letter-spacing:.3px;color:#0d1117;
+    background:#39C25E;border-radius:20px;padding:2px 8px;}
+  .asknote{font-size:11.5px;color:var(--muted);font-style:italic;line-height:1.4;}
+  .asknote b{color:var(--soft);font-style:normal;font-weight:600;}
+
+  /* ---- Track 2 "scenario" header cards (red = soft-no handling, green = closing action) ---- */
+  .card.scenario .label{font-size:10px;}
+  .card.scenario .scentitle{font-size:14px;font-weight:700;color:#fff;margin-top:4px;line-height:1.3;}
+  .card.scenario.handle{background:#1a0f0f;border-color:#8b3a3a;border-left-color:#8b3a3a;}
+  .card.scenario.handle .label{color:#e08a8a;}
+  .card.scenario.do .label{color:#39C25E;}
+
+  /* ---- Bulleted lists inside move cards (readiness signals) ---- */
+  .qlist{margin:6px 0 0;padding-left:18px;}
+  .qlist li{font-size:12px;line-height:1.5;color:var(--soft);margin-bottom:4px;}
+  .qlist li:last-child{margin-bottom:0;}
+
+  /* ---- Closing reference cards (formula + "what kills the close") ---- */
+  .card.refcard .refsub{font-size:11px;color:var(--muted);font-style:italic;margin-bottom:7px;}
+  .card.refcard .refrules{margin-top:9px;border-top:1px solid var(--line);padding-top:8px;}
+  .card.refcard .refrules>b{font-size:11px;color:var(--probe);text-transform:uppercase;letter-spacing:.5px;}
+  .card.refcard .refrules ul{margin:5px 0 0;padding-left:18px;}
+  .card.refcard .refrules li{font-size:11.5px;line-height:1.5;color:var(--soft);margin-bottom:5px;}
+  .card.refcard .refrules li:last-child{margin-bottom:0;}
+
+  /* ===================== FEEDBACK ADDITIONS ===================== */
+  /* Per-card feedback button (injected onto every card via a DOM observer) */
+  .fbbtn{margin-left:auto;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+    background:transparent;border:1px solid var(--line);color:var(--muted);
+    border-radius:6px;padding:2px 5px;cursor:pointer;opacity:.4;transition:.12s;}
+  .card:hover .fbbtn{opacity:1;}
+  .fbbtn:hover{border-color:var(--probe);color:var(--probe);}
+  .fbbtn svg{display:block;}
+
+  /* Composer modal */
+  .fb-overlay{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.62);
+    display:flex;align-items:center;justify-content:center;padding:20px;}
+  .fb-overlay[hidden]{display:none;}
+  .fb-modal{width:440px;max-width:100%;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:20px;box-shadow:0 24px 60px rgba(0,0,0,.6);}
+  .fb-head{font-size:15px;font-weight:700;color:#fff;}
+  .fb-ctx{margin-top:6px;font-size:12px;color:var(--probe);font-weight:600;}
+  .fb-types{display:flex;gap:6px;margin:14px 0;}
+  .fb-types button{flex:1;background:var(--card-2);border:1px solid var(--line);color:var(--soft);
+    font-size:12px;font-weight:600;padding:7px;border-radius:8px;cursor:pointer;font-family:inherit;transition:.12s;}
+  .fb-types button.active{background:var(--probe);border-color:var(--probe);color:#161617;}
+  .fb-modal textarea{width:100%;min-height:96px;resize:vertical;background:var(--bg);
+    border:1px solid var(--line);border-radius:8px;color:var(--text);font-family:inherit;
+    font-size:13px;line-height:1.5;padding:10px;}
+  .fb-modal input{width:100%;margin-top:10px;background:var(--bg);border:1px solid var(--line);
+    border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;padding:9px 10px;}
+  .fb-modal textarea:focus,.fb-modal input:focus{outline:none;border-color:var(--probe);}
+  .fb-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;}
+  .fb-btn-ghost{background:transparent;border:1px solid var(--line);color:var(--soft);
+    font-weight:600;font-size:13px;padding:8px 14px;border-radius:8px;cursor:pointer;font-family:inherit;}
+  .fb-btn-ghost:hover{color:#fff;border-color:#3d3d40;}
+  .fb-btn-primary{background:var(--probe);border:1px solid var(--probe);color:#161617;
+    font-weight:700;font-size:13px;padding:8px 16px;border-radius:8px;cursor:pointer;font-family:inherit;}
+  .fb-btn-primary:hover{filter:brightness(1.06);}
+  .fb-note{margin-top:10px;font-size:11.5px;color:var(--muted);min-height:14px;}
+  .fb-toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:320;
+    background:#39C25E;color:#08210f;font-weight:700;font-size:13px;padding:10px 18px;border-radius:10px;
+    box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .2s;}
+  .fb-toast.show{opacity:1;}
+</style>
+</head>
+<body>
+  <div id="bar">
+    <div class="brand">
+      <span class="wm">GovWell</span>
+      <span class="flagmark" aria-hidden="true">
+        <svg width="22" height="17" viewBox="0 0 28 22" fill="none">
+          <rect x="1" y="12.5" width="6.5" height="7.5" fill="#FEAF0E"/>
+          <polygon points="9,1.5 16.5,3.8 24.5,1.5 24.5,8.5 16.5,10.8 9,8.5" fill="#FEAF0E"/>
+        </svg>
+      </span>
+      <span class="bsep">·</span><span class="btag">Cold Call Tree</span>
+    </div>
+    <div class="tabs">
+      <button class="tab active" id="tabOpener">Opener</button>
+      <button class="tab" id="tabMid">Midgame</button>
+      <button class="tab" id="tabObj">Objections</button>
+      <button class="tab" id="tabClose">Closing</button>
+    </div>
+    <div class="spacer"></div>
+    <!-- Opener controls (existing) -->
+    <div class="ctls" id="ctlsOpener">
+      <button class="btn" id="expandAll">Expand all</button>
+      <button class="btn" id="collapseAll">Collapse all</button>
+      <button class="btn icon" id="zoomOut">&minus;</button>
+      <button class="btn icon" id="zoomIn">&plus;</button>
+      <button class="btn" id="reset">Reset view</button>
+    </div>
+    <!-- Midgame controls -->
+    <div class="ctls" id="ctlsMid" style="display:none">
+      <button class="btn" id="midExpandAll">Expand all</button>
+      <button class="btn" id="midCollapseAll">Collapse all</button>
+      <button class="btn icon" id="midZoomOut">&minus;</button>
+      <button class="btn icon" id="midZoomIn">&plus;</button>
+      <button class="btn" id="midReset">Reset view</button>
+    </div>
+    <!-- Objections controls -->
+    <div class="ctls" id="ctlsObj" style="display:none">
+      <button class="btn" id="objExpandAll">Expand all</button>
+      <button class="btn" id="objCollapseAll">Collapse all</button>
+      <button class="btn icon" id="objZoomOut">&minus;</button>
+      <button class="btn icon" id="objZoomIn">&plus;</button>
+      <button class="btn" id="objReset">Reset view</button>
+    </div>
+    <!-- Closing controls -->
+    <div class="ctls" id="ctlsClose" style="display:none">
+      <button class="btn" id="closeExpandAll">Expand all</button>
+      <button class="btn" id="closeCollapseAll">Collapse all</button>
+      <button class="btn icon" id="closeZoomOut">&minus;</button>
+      <button class="btn icon" id="closeZoomIn">&plus;</button>
+      <button class="btn" id="closeReset">Reset view</button>
+    </div>
+  </div>
+
+  <div id="viewport">
+    <div id="world">
+      <svg id="links"></svg>
+      <div id="cards"></div>
+    </div>
+  </div>
+
+  <div id="viewportMid" style="display:none">
+    <div id="worldMid">
+      <svg id="linksMid"></svg>
+      <div id="cardsMid"></div>
+    </div>
+  </div>
+
+  <div id="viewportObj" style="display:none">
+    <div id="worldObj">
+      <svg id="linksObj"></svg>
+      <div id="cardsObj"></div>
+    </div>
+  </div>
+
+  <div id="viewportClose" style="display:none">
+    <div id="worldClose">
+      <svg id="linksClose"></svg>
+      <div id="cardsClose"></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>Drag</b> to pan · <b>Scroll</b> to zoom · <b>Click a card</b> to expand · <b>💬</b> on any card to suggest an edit
+  </div>
+
+<script>
+/* ============================== DATA ============================== */
+const OPENERS = [
+  {
+    n:'01', title:'Competitor Observation', accent:'#41AAEB',
+    useWhen:'Use when: a vendor is visible on their website.',
+    script:`"Hey [First Name] — this is [Your Name], how's it going? Yeah, so the reason I was calling in — I'm with GovWell, we make [permitting / inspections] software. I was poking around on [City/County]'s website, and saw y'all were using [Competitor]. Figured I'd call in and see how that's been treating you."`,
+    branches:[
+      { resp:`"It's fine / good"`, moves:[
+        { text:`"Glad to hear it. Are you using it for inspections and plan review too, or mainly just permitting?"` },
+        { probe:true, text:`"Gotcha. Are y'all using it for [inspections / plan review / online apps] as well, or mainly just the [permitting] side?"` },
+      ]},
+      { resp:`"Shares pain"`, moves:[
+        { text:`Repeat back what they said, then: "Yeah, we hear that a lot from [vendor] shops — that's actually why a lot of cities switch."` },
+      ]},
+      { resp:`"Not interested"`, moves:[
+        { text:`"Totally fair — are you locked into a contract, or just happy with where things are?"` },
+      ]},
+    ]
+  },
+  {
+    n:'02', title:'Gap Observation', accent:'#39C25E',
+    useWhen:'Use when: no vendor visible — no portal or online submission on their site.',
+    script:`"Hey [First Name] — this is [Your Name]. Yeah, I'm calling because I was looking on y'all's website and I didn't see a place to submit [building permits] online. I was wondering if that's the case, or if I'm just missing it."`,
+    branches:[
+      { resp:`"Yeah, still on paper"`, moves:[
+        { text:`"Got it — a lot of cities your size are still there. How are you tracking status internally?"` },
+      ]},
+      { resp:`"We use [system]"`, moves:[
+        { text:`"Oh nice — how's that been working for the team?"` },
+      ]},
+      { resp:`"It's on the site, you missed it"`, moves:[
+        { text:`"Oh good — sorry about that! Out of curiosity, how long have you been on that system?"` },
+      ]},
+    ]
+  },
+  {
+    n:'03', title:'Internal Referral', accent:'#bc8cff',
+    useWhen:'Use when: someone else at this org pointed you here.',
+    script:`"Hey [First Name] — this is [Your Name] from GovWell. I spoke with [Name] over in [dept / role], and they mentioned you were the main person on the [permitting / planning] side. Wanted to introduce myself."`,
+    branches:[
+      { resp:`"Yeah, I know [Name]"`, moves:[
+        { text:`"Yeah, they were helpful. Wanted to get a sense of how you're currently handling [workflow]."` },
+        { probe:true, text:`"[Name] mentioned you're the main user of [system] — how's that been going for you day-to-day?"` },
+      ]},
+      { resp:`"I don't know who that is"`, moves:[
+        { text:`"No worries — I was calling because we work with a few cities in [state] on permitting and wanted to introduce GovWell."` },
+      ]},
+    ]
+  },
+  {
+    n:'04', title:'Neighbor Reference', accent:'#f0883e',
+    useWhen:'Use when: a GovWell customer is in a nearby city/county you can name.',
+    script:`"Hey [First Name] — this is [Your Name] from GovWell. We started working with [Nearby City] recently — so we're reaching out to some of the neighboring cities to introduce ourselves. Is now an okay time?"`,
+    branches:[
+      { resp:`"Oh yeah, I know them"`, moves:[
+        { text:`"Yeah, they were a [paper / old system] shop before — wanted to see if you had the same setup."` },
+      ]},
+      { resp:`"Good for them"`, moves:[
+        { text:`"Ha — fair enough. Curious what you're using on your end for permitting — still on [system] or something different?"` },
+      ]},
+      { resp:`"We just renewed our contract"`, moves:[
+        { text:`"Oh good to know — how long did you sign for? Just so I know when it might be worth touching base again."` },
+      ]},
+    ]
+  },
+];
+
+/* ============================== BUILD TREE ============================== */
+let _id = 0;
+function node(props){ return Object.assign({id:'n'+(_id++), children:[], expanded:false}, props); }
+
+const root = node({ type:'start', expanded:true, accent:'#41AAEB' });
+OPENERS.forEach(op=>{
+  const o = node({ type:'opener', accent:op.accent, num:op.n, title:op.title,
+                   useWhen:op.useWhen, script:op.script });
+  op.branches.forEach(br=>{
+    const r = node({ type:'response', accent:op.accent, text:br.resp });
+    br.moves.forEach(mv=>{
+      r.children.push(node({ type:'move', accent:op.accent, text:mv.text, probe:!!mv.probe }));
+    });
+    o.children.push(r);
+  });
+  root.children.push(o);
+});
+
+/* ============================== LAYOUT CONSTANTS ============================== */
+const CARD_W = 272;
+const COL_W  = 372;   // horizontal column pitch
+const V_GAP  = 20;    // vertical gap between leaf cards
+
+/* ============================== RENDER ============================== */
+const viewport = document.getElementById('viewport');
+const world    = document.getElementById('world');
+const cardsEl  = document.getElementById('cards');
+const svg      = document.getElementById('links');
+const SVGNS    = 'http://www.w3.org/2000/svg';
+
+let tx=80, ty=0, scale=1, firstRun=true;
+const elMap = new Map();
+
+function buildCards(){
+  cardsEl.innerHTML='';
+  elMap.clear();
+  (function walk(n, depth){
+    const el = makeCard(n);
+    cardsEl.appendChild(el);
+    elMap.set(n.id, el);
+    if(n.expanded) n.children.forEach(c=>walk(c, depth+1));
+  })(root,0);
+}
+
+function makeCard(n){
+  const el = document.createElement('div');
+  el.className = 'card ' + n.type + (n.probe?' probe':'') +
+                 (n.children.length?' has':'');
+  el.style.setProperty('--accent', n.accent);
+  const kids = n.children.length;
+
+  if(n.type==='start'){
+    el.innerHTML = `<div class="big">📞 Call Start</div>
+      <div class="hint">Pick an opener →</div>`;
+  } else if(n.type==='opener'){
+    el.innerHTML = `
+      <div class="top">
+        <span class="num">${n.num}</span>
+        <span class="title">${n.title}</span>
+        ${kids?`<span class="pill">${n.expanded?'▾':'▸ '+kids}</span>`:''}
+      </div>
+      <div class="usewhen">${n.useWhen}</div>
+      <div class="body script">${n.script}</div>`;
+  } else if(n.type==='response'){
+    el.innerHTML = `
+      <div class="top">
+        <span class="label">They say</span>
+        ${kids?`<span class="pill">${n.expanded?'▾':'▸ '+kids}</span>`:''}
+      </div>
+      <div class="body">${n.text}</div>`;
+  } else { // move / probe
+    el.innerHTML = `
+      <div class="top"><span class="label">${n.probe?'Probe':'Your move'}</span></div>
+      <div class="body">${n.text}</div>`;
+  }
+
+  el.addEventListener('click', (e)=>{
+    if(!n.children.length) return;
+    // don't toggle if the user is selecting/copying text
+    const sel = window.getSelection();
+    if(sel && !sel.isCollapsed) return;
+    n.expanded = !n.expanded;
+    render();
+  });
+  return el;
+}
+
+function layout(){
+  let cursor = 0;
+  (function place(n, depth){
+    n.x = depth * COL_W;
+    const kids = n.expanded ? n.children : [];
+    if(kids.length===0){
+      n.y = cursor;
+      cursor += n.h + V_GAP;
+    } else {
+      kids.forEach(k=>place(k, depth+1));
+      const f=kids[0], l=kids[kids.length-1];
+      n.y = (f.y + f.h/2 + l.y + l.h/2)/2 - n.h/2;
+    }
+  })(root,0);
+}
+
+function drawLinks(){
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  (function walk(n){
+    if(!n.expanded) return;
+    n.children.forEach(c=>{
+      const x1=n.x+CARD_W, y1=n.y+n.h/2, x2=c.x, y2=c.y+c.h/2;
+      const mx=(x1+x2)/2;
+      const p=document.createElementNS(SVGNS,'path');
+      p.setAttribute('d',`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+      p.setAttribute('fill','none');
+      p.setAttribute('stroke',c.accent);
+      p.setAttribute('stroke-width','2');
+      p.setAttribute('stroke-opacity','.55');
+      svg.appendChild(p);
+      walk(c);
+    });
+  })(root);
+}
+
+function render(){
+  buildCards();
+  // measure heights
+  elMap.forEach((el,id)=>{}); // ensure in DOM
+  const measure = (n)=>{
+    const el=elMap.get(n.id);
+    n.h = el ? el.offsetHeight : 60;
+    n.w = CARD_W;
+    if(n.expanded) n.children.forEach(measure);
+  };
+  measure(root);
+
+  layout();
+
+  // normalize so min y = 0
+  let minY=Infinity, maxX=0, maxY=0;
+  const scan=(n)=>{ minY=Math.min(minY,n.y); maxY=Math.max(maxY,n.y+n.h);
+    maxX=Math.max(maxX,n.x+CARD_W); if(n.expanded) n.children.forEach(scan); };
+  scan(root);
+  const shift = (minY<0)? -minY : 0;
+  const applyShift=(n)=>{ n.y+=shift; if(n.expanded) n.children.forEach(applyShift); };
+  applyShift(root);
+  maxY+=shift;
+
+  // position cards
+  const pos=(n)=>{ const el=elMap.get(n.id); el.style.left=n.x+'px'; el.style.top=n.y+'px';
+    if(n.expanded) n.children.forEach(pos); };
+  pos(root);
+
+  svg.setAttribute('width', maxX+40);
+  svg.setAttribute('height', maxY+40);
+  svg.style.width=(maxX+40)+'px';
+  svg.style.height=(maxY+40)+'px';
+  drawLinks();
+
+  if(firstRun){
+    firstRun=false;
+    ty = Math.max(20, (viewport.clientHeight - maxY)/2);
+    applyTransform();
+  }
+}
+
+function applyTransform(){
+  world.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
+}
+
+/* ============================== PAN ============================== */
+let panning=false, sx=0, sy=0, stx=0, sty=0;
+viewport.addEventListener('mousedown',(e)=>{
+  if(e.target.closest('.card')) return;       // let cards handle their own clicks
+  panning=true; sx=e.clientX; sy=e.clientY; stx=tx; sty=ty;
+  viewport.classList.add('panning');
+});
+window.addEventListener('mousemove',(e)=>{
+  if(!panning) return;
+  tx=stx+(e.clientX-sx); ty=sty+(e.clientY-sy); applyTransform();
+});
+window.addEventListener('mouseup',()=>{ panning=false; viewport.classList.remove('panning'); });
+
+/* ============================== ZOOM ============================== */
+function zoomAt(factor, cx, cy){
+  const ns=Math.min(1.7, Math.max(0.35, scale*factor));
+  const k=ns/scale;
+  // keep point under cursor fixed
+  tx = cx - (cx - tx)*k;
+  ty = cy - (cy - ty)*k;
+  scale=ns; applyTransform();
+}
+viewport.addEventListener('wheel',(e)=>{
+  e.preventDefault();
+  const r=viewport.getBoundingClientRect();
+  // proportional, dampened zoom: smooth for both trackpad and mouse wheel
+  const d=Math.max(-60,Math.min(60,e.deltaY));   // clamp big wheel jumps
+  zoomAt(Math.exp(-d*0.0022), e.clientX-r.left, e.clientY-r.top);
+},{passive:false});
+
+document.getElementById('zoomIn').onclick  =()=>zoomAt(1.15, viewport.clientWidth/2, viewport.clientHeight/2);
+document.getElementById('zoomOut').onclick =()=>zoomAt(1/1.15, viewport.clientWidth/2, viewport.clientHeight/2);
+document.getElementById('reset').onclick   =()=>{ scale=1; tx=80; firstRun=true; render(); };
+
+/* ============================== EXPAND / COLLAPSE ALL ============================== */
+function setAll(state){
+  (function w(n){
+    if(n.children.length) n.expanded = state;
+    n.children.forEach(w);
+  })(root);
+  root.expanded=true; // start always shows openers
+  render();
+}
+document.getElementById('expandAll').onclick  =()=>setAll(true);
+document.getElementById('collapseAll').onclick=()=>{ setAll(false);
+  root.children.forEach(o=>o.expanded=false); render(); };
+
+window.addEventListener('resize',()=>{ /* keep transform; nothing required */ });
+
+/* ============================== GO ============================== */
+render();
+
+
+/* ================================================================== */
+/* ======================= MIDGAME MODULE =========================== */
+/* Independent engine — its own scope, DOM containers, and state.     */
+/* Does not touch the opener engine above.                            */
+/* ================================================================== */
+const Midgame = (function(){
+
+  /* =============================================================== */
+  /* ===================== MIDGAME DATA (edit here) ================ */
+  /* Two tracks. Each question = one card holding the category,      */
+  /* 1–2 verbatim phrasings, and a one-line phrasing note.           */
+  /* A phrasing may carry an optional `hint` (a small instruction    */
+  /* shown under the quote). `flag:true` badges a high-value card.   */
+  /* =============================================================== */
+  const TRACKS = [
+
+    /* ---- TRACK 1: PROCESS QUESTIONS — map the prospect's current workflows ---- */
+    {
+      num:'T1', title:'Process Questions', accent:'#41AAEB',
+      subtitle:'Map their current workflows.',
+      questions:[
+        { cat:'Permitting',
+          phrasings:[
+            { say:`"I noticed there wasn't an online portal for permit applications — how are you guys thinking about that process?"` },
+            { say:`"How do you track all of those? Do you ever have anything slip through the cracks?"` },
+          ],
+          note:`Reference something specific and observable — a generic "what do you use?" returns a one-word answer.` },
+
+        { cat:'Plan Review',
+          phrasings:[
+            { say:`"Is plan review handled through [their system], or are you using a third party — like Bluebeam?"` },
+            { say:`"Does [system] offer automated plan review, or is that done manually?"` },
+          ],
+          note:`Naming Bluebeam as a reference point almost always unlocks detail — they either confirm a gap or explain their alternative.` },
+
+        { cat:'Inspections',
+          phrasings:[
+            { say:`"Are you guys able to do offline inspections?"` },
+            { say:`"When you're out in the field making an inspection, are you logging it on a tablet or still paper-based?"` },
+          ],
+          note:`Mobile/offline capability is a reliable pain opener — field staff almost always have friction here.` },
+
+        { cat:'Code Enforcement',
+          phrasings:[
+            { say:`"I didn't see a place to submit code enforcement complaints online on your site — is that the case?"` },
+            { say:`"Do you think having a system to track that online would make your life easier?"` },
+          ],
+          note:`The gap observation works especially well here — most municipal sites visibly lack an online complaint portal.` },
+
+        { cat:'Planning & Zoning',
+          phrasings:[
+            { say:`"Does planning and zoning sit at the county level, or is that handled by the individual cities?"`, hint:`Jurisdiction qualifier — ask this first.` },
+            { say:`"What's your current zoning process, and how's it been working for you?"` },
+          ],
+          note:`Qualify jurisdiction before diving into process — many counties don't handle building permits and the probe becomes irrelevant.` },
+
+        { cat:'Licensing',
+          phrasings:[
+            { say:`"Who handles business licenses — is that the clerk's office, or a different department?"`, hint:`Establish ownership first.` },
+            { say:`"How are you processing licenses — business, contractor, liquor licenses? Do you have a system managing those?"` },
+          ],
+          note:`Start with who handles it before probing pain — licensing ownership varies widely across jurisdictions.` },
+      ]
+    },
+
+    /* ---- TRACK 2: SYSTEM PAIN QUESTIONS — surface dissatisfaction with current vendor ---- */
+    {
+      num:'T2', title:'System Pain Questions', accent:'#f0883e',
+      subtitle:'Surface dissatisfaction with their current vendor.',
+      questions:[
+        { cat:'How Long on Current System',
+          phrasings:[
+            { say:`"How long have you been on it?"`, hint:`Ask immediately after they name the vendor.` },
+            { say:`"How long have you guys been on it — I know it's more of a legacy system."` },
+          ],
+          note:`Ask right after they name the vendor — later it feels interrogative.` },
+
+        { cat:'Customer Support Quality', flag:true,
+          phrasings:[
+            { say:`"When something goes wrong — like a bug or you need help — what does that look like? Is there someone you can call, or is it more of a ticket? And how long does it typically take?"` },
+            { say:`"When things do arise, are they pretty quick at resolving them? How's the support looking?"` },
+          ],
+          note:`Specificity unlocks pain — every legacy software user has a support horror story they've accepted as normal. "Is it a ticket? How long?" is the unlock phrase.` },
+
+        { cat:'Incomplete Applications',
+          phrasings:[
+            { say:`"When applicants submit permits, are they usually complete and workable, or do you end up sending a lot back?"` },
+            { say:`"Do contractors have to resubmit their info every time they pull a permit, or is that stored somewhere?"` },
+          ],
+          note:`Almost never asked proactively — surfaces significant pain when it does.` },
+
+        { cat:'Reliability / Downtime',
+          phrasings:[
+            { say:`"Does your system ever go down? What happens to your workflow when it does?"` },
+            { say:`"Any issues with slowness or outages — especially during busy seasons?"` },
+          ],
+          note:`Currently never asked by any rep — a complete gap in the team's repertoire.` },
+
+        { cat:'Reporting to Council / Boards',
+          phrasings:[
+            { say:`"When your council or board asks for permit data or code enforcement stats, how do you pull that?"` },
+            { say:`"How's reporting — if you want to see how many permits are open or what your inspection load looks like?"` },
+          ],
+          note:`High-value, low-frequency — the one time it was asked on a recorded call, it immediately surfaced pain.` },
+      ]
+    },
+  ];
+  /* ===================== END MIDGAME DATA ======================== */
+
+  /* ---- Build tree: start -> tracks -> question cards ---- */
+  let _id=0;
+  const mk = p => Object.assign({id:'m'+(_id++),children:[],expanded:false},p);
+  const root = mk({type:'start',expanded:true,accent:'#41AAEB'});
+  TRACKS.forEach(t=>{
+    const tn = mk({type:'track',accent:t.accent,num:t.num,title:t.title,subtitle:t.subtitle});
+    t.questions.forEach(q=>{
+      tn.children.push(mk({type:'qcard',accent:t.accent,cat:q.cat,phrasings:q.phrasings,note:q.note,flag:!!q.flag}));
+    });
+    root.children.push(tn);
+  });
+
+  /* ---- DOM + constants ---- */
+  const V=document.getElementById('viewportMid');
+  const W=document.getElementById('worldMid');
+  const C=document.getElementById('cardsMid');
+  const S=document.getElementById('linksMid');
+  const NS='http://www.w3.org/2000/svg';
+  const CARD_W=272, COL_W=372, V_GAP=20;
+  let tx=80, ty=0, scale=1, firstRun=true, rendered=false;
+  const elMap=new Map();
+  let refEl=null;
+
+  function makeCard(n){
+    const el=document.createElement('div');
+    el.className='card '+ n.type + (n.children.length?' has':'');
+    el.style.setProperty('--accent', n.accent);
+    const kids=n.children.length;
+
+    if(n.type==='start'){
+      el.innerHTML=`<div class="big">🔎 Midgame · Discovery</div>
+        <div class="hint">Pick a track →</div>`;
+    } else if(n.type==='track'){
+      el.innerHTML=`
+        <div class="top">
+          <span class="num">${n.num}</span>
+          <span class="title">${n.title}</span>
+          ${kids?`<span class="pill">${n.expanded?'▾':'▸ '+kids}</span>`:''}
+        </div>
+        <div class="usewhen">${n.subtitle}</div>`;
+    } else { // qcard (leaf)
+      const says=n.phrasings.map(p=>
+        `<div class="qsay">${p.say}${p.hint?`<span class="qhint">${p.hint}</span>`:''}</div>`
+      ).join('');
+      el.innerHTML=`
+        <div class="top">
+          <span class="label">${n.cat}</span>
+          ${n.flag?`<span class="flag">★ High value</span>`:''}
+        </div>
+        ${says}
+        <div class="qnote">${n.note}</div>`;
+    }
+
+    el.addEventListener('click',()=>{
+      if(!n.children.length) return;
+      const sel=window.getSelection(); if(sel&&!sel.isCollapsed) return;
+      n.expanded=!n.expanded; render();
+    });
+    return el;
+  }
+
+  /* Static sequencing reference card — not part of the node tree, never expands */
+  function makeRef(){
+    const el=document.createElement('div');
+    el.className='card refcard';
+    el.innerHTML=`
+      <div class="top"><span class="label">📋 Discovery Order</span></div>
+      <ol>
+        <li>What system / process are you using?</li>
+        <li>How long have you been on it?</li>
+        <li>How's it going?</li>
+        <li>What are you using it for? <span class="dim">(scope)</span></li>
+        <li>Anything you wish it did better?</li>
+        <li>Customer support probe <span class="dim">— if lukewarm or negative</span></li>
+        <li>Who else is involved in decisions like this?</li>
+        <li>What does timing look like?</li>
+      </ol>
+      <div class="avoid"><b>Avoid:</b> asking about contract or price before establishing pain.</div>`;
+    return el;
+  }
+
+  function drawLinks(){
+    while(S.firstChild) S.removeChild(S.firstChild);
+    (function walk(n){
+      if(!n.expanded) return;
+      n.children.forEach(c=>{
+        const x1=n.x+CARD_W, y1=n.y+n.h/2, x2=c.x, y2=c.y+c.h/2, mx=(x1+x2)/2;
+        const p=document.createElementNS(NS,'path');
+        p.setAttribute('d',`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+        p.setAttribute('fill','none');
+        p.setAttribute('stroke',c.accent);
+        p.setAttribute('stroke-width','2');
+        p.setAttribute('stroke-opacity','.55');
+        S.appendChild(p);
+        walk(c);
+      });
+    })(root);
+  }
+
+  function render(){
+    rendered=true;
+    C.innerHTML=''; elMap.clear();
+    // tree cards
+    (function walk(n){ const el=makeCard(n); C.appendChild(el); elMap.set(n.id,el);
+      if(n.expanded) n.children.forEach(walk); })(root);
+    // static reference card
+    refEl=makeRef(); C.appendChild(refEl);
+
+    // measure
+    const measure=n=>{ const el=elMap.get(n.id); n.h=el?el.offsetHeight:60; n.w=CARD_W;
+      if(n.expanded) n.children.forEach(measure); };
+    measure(root);
+    const refH=refEl.offsetHeight;
+
+    // layout — depth offset +1 so the reference card occupies column 0
+    let cursor=0;
+    (function place(n,depth){
+      n.x=(depth+1)*COL_W;
+      const kids=n.expanded?n.children:[];
+      if(!kids.length){ n.y=cursor; cursor+=n.h+V_GAP; }
+      else { kids.forEach(k=>place(k,depth+1));
+        const f=kids[0], l=kids[kids.length-1];
+        n.y=(f.y+f.h/2+l.y+l.h/2)/2 - n.h/2; }
+    })(root,0);
+
+    // normalize tree top to 0, then vertically center tree vs. reference card
+    let minY=Infinity,maxX=0,maxYb=0;
+    const scan=n=>{ minY=Math.min(minY,n.y); maxYb=Math.max(maxYb,n.y+n.h);
+      maxX=Math.max(maxX,n.x+CARD_W); if(n.expanded) n.children.forEach(scan); };
+    scan(root);
+    const shift = minY<0 ? -minY : -minY;            // bring min to 0
+    const treeH = maxYb+shift;
+    const totalH = Math.max(treeH, refH);
+    const treeOff = shift + (totalH-treeH)/2;
+    const apply=n=>{ n.y+=treeOff; if(n.expanded) n.children.forEach(apply); };
+    apply(root);
+
+    // position cards
+    const pos=n=>{ const el=elMap.get(n.id); el.style.left=n.x+'px'; el.style.top=n.y+'px';
+      if(n.expanded) n.children.forEach(pos); };
+    pos(root);
+    refEl.style.left='0px'; refEl.style.top=((totalH-refH)/2)+'px';
+
+    // size svg
+    S.setAttribute('width',maxX+40); S.setAttribute('height',totalH+40);
+    S.style.width=(maxX+40)+'px'; S.style.height=(totalH+40)+'px';
+    drawLinks();
+
+    if(firstRun){ firstRun=false; ty=Math.max(20,(V.clientHeight-totalH)/2); applyTransform(); }
+  }
+
+  function applyTransform(){ W.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; }
+
+  /* ---- Pan ---- */
+  let panning=false,sx=0,sy=0,stx=0,sty=0;
+  V.addEventListener('mousedown',e=>{ if(e.target.closest('.card'))return;
+    panning=true;sx=e.clientX;sy=e.clientY;stx=tx;sty=ty;V.classList.add('panning'); });
+  window.addEventListener('mousemove',e=>{ if(!panning)return;
+    tx=stx+(e.clientX-sx); ty=sty+(e.clientY-sy); applyTransform(); });
+  window.addEventListener('mouseup',()=>{ panning=false; V.classList.remove('panning'); });
+
+  /* ---- Zoom (proportional, dampened — matches opener) ---- */
+  function zoomAt(f,cx,cy){ const ns=Math.min(1.7,Math.max(0.35,scale*f)); const k=ns/scale;
+    tx=cx-(cx-tx)*k; ty=cy-(cy-ty)*k; scale=ns; applyTransform(); }
+  V.addEventListener('wheel',e=>{ e.preventDefault(); const r=V.getBoundingClientRect();
+    const d=Math.max(-60,Math.min(60,e.deltaY)); zoomAt(Math.exp(-d*0.0022),e.clientX-r.left,e.clientY-r.top);
+  },{passive:false});
+
+  /* ---- Controls ---- */
+  document.getElementById('midExpandAll').onclick=()=>{
+    (function w(n){ if(n.children.length)n.expanded=true; n.children.forEach(w); })(root);
+    root.expanded=true; render(); };
+  document.getElementById('midCollapseAll').onclick=()=>{
+    (function w(n){ if(n.children.length)n.expanded=false; n.children.forEach(w); })(root);
+    root.expanded=true; root.children.forEach(t=>t.expanded=false); render(); };
+  document.getElementById('midZoomIn').onclick =()=>zoomAt(1.15, V.clientWidth/2, V.clientHeight/2);
+  document.getElementById('midZoomOut').onclick=()=>zoomAt(1/1.15, V.clientWidth/2, V.clientHeight/2);
+  document.getElementById('midReset').onclick  =()=>{ scale=1; tx=80; firstRun=true; render(); };
+
+  // Render lazily on first view (heights must be measured while visible)
+  return { ensure(){ if(!rendered) render(); } };
+})();
+
+
+/* ================================================================== */
+/* ====================== OBJECTIONS MODULE ========================= */
+/* Independent engine — its own scope, DOM containers, and state.     */
+/* Does not touch the opener or midgame engines above.                */
+/* ================================================================== */
+const Objections = (function(){
+
+  /* =============================================================== */
+  /* =================== OBJECTIONS DATA (edit here) =============== */
+  /* Root -> 9 objection cards (muted red). Each objection shows its */
+  /* frequency + timing inline, and expands into:                    */
+  /*   move      = the recommended handling structure (green steps)  */
+  /*   examples  = best-in-class verbatim lines (green; optional     */
+  /*               `outcome` shows the prospect's reaction)          */
+  /*   insight   = a key insight, where one exists (green)           */
+  /*   fail      = a failure-mode caution, where one exists (amber)  */
+  /* Omit `examples`, `insight`, or `fail` to drop that child card.  */
+  /* =============================================================== */
+  const OBJECTIONS = [
+
+    /* ---- 01 ---- */
+    { num:'01', title:'Happy With Current System',
+      freq:`~35–40% of substantive calls · most common`,
+      timing:`Mid-call, after the opener lands`,
+      move:[
+        `Validate — "Glad to hear it's working."`,
+        `Normalize peer behavior — "We talk to a lot of folks on [vendor] who say the same thing."`,
+        `Name a specific known pain to confirm or deny — "The one thing I keep hearing from [vendor] shops is [plan review needing a third tool, support tickets taking a week]. Is that your experience too?"`,
+      ],
+      examples:[
+        { who:`Best-in-class`, quote:`Catch the qualifier — when they say "relatively happy," "it's fine," or "it's usable," reflect it back: "You said relatively happy — what would make it a stronger yes?"` },
+      ],
+      fail:`Pivoting to a feature pitch. A prospect named it directly on a recorded call: "Good sales pitch. But no." Feature lists confirm the sales-call frame and end the conversation.` },
+
+    /* ---- 02 ---- */
+    { num:'02', title:'No Budget',
+      freq:`~25–30% of substantive calls`,
+      timing:`Mid-call, often after a pricing signal`,
+      move:[
+        `Challenge the premise — "Have you actually talked to vendors and gotten quotes, or is this more of a gut feeling around budget?"`,
+        `If assumed, not researched — reframe to planning: "We work on an 18-month timeline with a lot of cities so they can prepare their next budget with a real number."`,
+        `If genuine — anchor a budget-cycle conversation: "When does your budget process typically kick off? People who go in with a directional number usually have an edge getting it approved."`,
+      ],
+      examples:[
+        { who:`Best-in-class`, quote:`"Have you already talked to other vendors and explored pricing, or is this more of a gut feeling around budget?"`, outcome:`Surfaces that the prospect has never actually gotten a quote.` },
+        { who:`Best-in-class → meeting booked`, quote:`"We sometimes work on an 18-month timeline so people can prepare budgets down the line."`, outcome:`Prospect: "Yeah, that makes sense. I can do that for the '28 budget year."` },
+      ],
+      fail:`Accepting "no budget" at face value and saying "okay, I'll call back later."` },
+
+    /* ---- 03 ---- */
+    { num:'03', title:'Locked in a Contract',
+      freq:`~15–20% of substantive calls`,
+      timing:`Late-call, after discovery — when they sense the meeting ask coming`,
+      move:[
+        `Normalize it — "Everyone I call is in a contract — these sales timelines are 12–18 months, so we start conversations while people are still committed."`,
+        `Get the timeline — "How long are you in for?"`,
+        `Plant a seed for the renewal window — "When you get to 6–12 months out, that's usually when cities start looking. I'll put a note to connect then."`,
+      ],
+      examples:[
+        { who:`Best-in-class`, quote:`"All I call now has a contract. So that's not too much of a concern since these sales timelines are twelve to eighteen months. So we do start speaking with folks while they're in contract."` },
+      ],
+      fail:`Contract buyout offer — 100% rejection rate in the dataset. Prospects who just invested in implementation feel threatened by the suggestion.` },
+
+    /* ---- 04 ---- */
+    { num:'04', title:'Too Small / Not Enough Volume',
+      freq:`~12–15% of substantive calls`,
+      timing:`Mid-call, during or after volume qualification`,
+      move:[
+        `Don't accept the self-disqualification.`,
+        `Challenge the assumption directly — "Our software was built for small towns — many of our customers have populations of 5,000 to 10,000 and process 30–100 permits a year. Our pricing reflects that."`,
+        `Name similar municipalities they'd recognize, if possible.`,
+      ],
+      examples:[
+        { who:`Best-in-class`, quote:`"Our software was built for small towns and communities. Many of our customers have a population size of five to ten thousand, and our pricing also reflects that."` },
+      ],
+      fail:`Accepting the self-disqualification without pushing back. Most "too small" prospects are in GovWell's actual sweet spot — the rep just hasn't said so.` },
+
+    /* ---- 05 ---- */
+    { num:'05', title:'Not the Decision Maker',
+      freq:`~10–12% of substantive calls`,
+      timing:`Early-to-mid call`,
+      move:[
+        `Validate the authority structure — "That makes total sense — this is a multi-stakeholder process."`,
+        `Reframe why you're talking to them — "We actually prefer talking to the people who use this daily — if they're not interested, there's no point talking to anyone above them."`,
+        `Use it as an intel opportunity — collect names, titles, and internal dynamics before hanging up.`,
+      ],
+      examples:[
+        { who:`Best-in-class`, quote:`"I like to talk to the people who are knee deep in these processes. I'm not trying to sneaky push any decision making your way."`, outcome:`Prospect relaxes and continues talking.` },
+        { who:`Best-in-class`, quote:`Uses the "wrong person" to map stakeholders and get a warm referral to the actual decision maker.` },
+      ] },
+
+    /* ---- 06 ---- */
+    { num:'06', title:'Call Back Later / Bad Timing',
+      freq:`~10–12% of substantive calls`,
+      timing:`Mid-to-late call`,
+      move:[
+        `Validate the timing — "Totally understand."`,
+        `Get a specific date, not a vague season — "Is there a specific month that tends to be better — after budget season, after a particular project wraps?"`,
+        `Make the callback conditional on something real — "I'll reach out in [month]. Is there anything I can send in the meantime that would make that conversation more useful when we connect?"`,
+      ],
+      fail:`Generic "I'll call back in the fall" with no anchor — effectively lost pipeline.` },
+
+    /* ---- 07 ---- */
+    { num:'07', title:'Just Implemented / Mid-Implementation',
+      freq:`~8–10% of substantive calls · distinct from "locked in a contract"`,
+      timing:`Mid-call, after the system discussion`,
+      move:[
+        `Validate the sunk cost — "Totally get it — you just went through all that pain to get it live."`,
+        `Offer a complementary angle, not a replacement — "We actually work alongside [their system] for cities that want to add plan review / code enforcement / public portal without replacing what they just implemented."`,
+        `Position as an insurance option — "Implementations sometimes hit rough patches 6–12 months in. If that happens and you want a backup option in your pocket, I'm happy to be that call."`,
+      ],
+      fail:`Treating this the same as "locked in a contract" and accepting a 2-year callback — the complementary angle is often genuinely relevant and no rep uses it consistently.` },
+
+    /* ---- 08 ---- */
+    { num:'08', title:'Send Me an Email',
+      freq:`~8–10% of substantive calls · a soft exit`,
+      timing:`Any point — often 60–90 seconds in, when they want a polite out`,
+      move:[
+        `Accept partially — "Totally — I'll send that over."`,
+        `Micro-commit before hanging up — "Just so I send the right thing and not a generic blast — are you mainly on [vendor] for permitting, or are you using it across inspections and code too?"`,
+        `Plant a specific hook — "I'll include a one-pager on how [specific workflow] compares — most folks on [vendor] tell me that's the page that surprised them."`,
+      ],
+      insight:`"Send me an email" is almost always reflexive — the prospect wants the call to end pleasantly, not to actually read an email. The micro-commit re-engages without pressuring for a meeting.`,
+      fail:`Accepting the email request immediately and asking "what's your email?" — the call ends, the email goes unread, and there's no established reason to follow up.` },
+
+    /* ---- 09 ---- */
+    { num:'09', title:'Already Evaluating / Chose Another Vendor',
+      freq:`~5–8% of substantive calls`,
+      timing:`Mid-to-late call`,
+      move:[
+        `Acknowledge without deflating — "That makes sense — a lot of cities go through a proper evaluation process."`,
+        `Get intel on who they're evaluating — "Who are you looking at? Just curious where we'd fit in that conversation."`,
+        `If already decided — plant for renewal: "If after three years you're not satisfied, I'd love to be the first call. Can I check back in when you're 6 months from renewal?"`,
+        `If still evaluating — ask for a slot: "We're typically faster to implement and easier to price than what you're looking at — worth a 15-minute look before you finalize?"`,
+      ] },
+  ];
+  /* ==================== END OBJECTIONS DATA ====================== */
+
+  /* ---- Build tree: start -> objection -> (move / examples / insight / fail) ---- */
+  let _id=0;
+  const mk = p => Object.assign({id:'o'+(_id++),children:[],expanded:false},p);
+  const root = mk({type:'start',expanded:true,accent:'#41AAEB'});
+  OBJECTIONS.forEach(o=>{
+    const on = mk({type:'objection',accent:'#8b3a3a',num:o.num,title:o.title,freq:o.freq,timing:o.timing});
+    on.children.push(mk({type:'move',accent:'#39C25E',label:'Recommended move',steps:o.move}));
+    (o.examples||[]).forEach(ex=>
+      on.children.push(mk({type:'move',accent:'#39C25E',label:ex.who,text:ex.quote,outcome:ex.outcome||''})));
+    if(o.insight) on.children.push(mk({type:'move',accent:'#39C25E',label:'Key insight',text:o.insight}));
+    if(o.fail)    on.children.push(mk({type:'move',accent:'#FEAF0E',probe:true,label:'Failure mode',text:o.fail}));
+    root.children.push(on);
+  });
+
+  /* ---- DOM + constants ---- */
+  const V=document.getElementById('viewportObj');
+  const W=document.getElementById('worldObj');
+  const C=document.getElementById('cardsObj');
+  const S=document.getElementById('linksObj');
+  const NS='http://www.w3.org/2000/svg';
+  const CARD_W=272, COL_W=372, V_GAP=20;
+  let tx=80, ty=0, scale=1, firstRun=true, rendered=false;
+  const elMap=new Map();
+  let refEl=null;
+
+  function makeCard(n){
+    const el=document.createElement('div');
+    const kids=n.children.length;
+    if(n.type==='start'){
+      el.className='card start';
+      el.innerHTML=`<div class="big">🛡️ Objection Handling</div>
+        <div class="hint">Pick an objection →</div>`;
+    } else if(n.type==='objection'){
+      el.className='card objection'+(kids?' has':'');
+      el.style.setProperty('--accent',n.accent);
+      el.innerHTML=`
+        <div class="top">
+          <span class="num">${n.num}</span>
+          <span class="title">${n.title}</span>
+          ${kids?`<span class="pill">${n.expanded?'▾':'▸ '+kids}</span>`:''}
+        </div>
+        <div class="objfreq">${n.freq}</div>
+        <div class="objtiming"><b>When:</b> ${n.timing}</div>`;
+    } else { // move: handling steps, example, insight, or failure-mode probe
+      el.className='card move'+(n.probe?' probe':'');
+      el.style.setProperty('--accent',n.accent);
+      let body;
+      if(n.steps){ body='<ol>'+n.steps.map(s=>`<li>${s}</li>`).join('')+'</ol>'; }
+      else { body=`<div class="body">${n.text}</div>`+(n.outcome?`<div class="exoutcome">↳ ${n.outcome}</div>`:''); }
+      el.innerHTML=`<div class="top"><span class="label">${n.label}</span></div>${body}`;
+    }
+    el.addEventListener('click',()=>{
+      if(!n.children.length) return;
+      const sel=window.getSelection(); if(sel&&!sel.isCollapsed) return;
+      n.expanded=!n.expanded; render();
+    });
+    return el;
+  }
+
+  /* Static master-principle reference card — not part of the node tree, never expands */
+  function makeRef(){
+    const el=document.createElement('div');
+    el.className='card refcard';
+    el.innerHTML=`
+      <div class="top"><span class="label">⚖️ Master Principle</span></div>
+      <div class="refbody">Test before you accept. Most objections are reflexive, not final.</div>
+      <div class="refflow">Validate → probe the premise → specific question or reframe.</div>
+      <div class="avoid"><b>Never</b> pitch features in response to an objection.</div>`;
+    return el;
+  }
+
+  function drawLinks(){
+    while(S.firstChild) S.removeChild(S.firstChild);
+    (function walk(n){
+      if(!n.expanded) return;
+      n.children.forEach(c=>{
+        const x1=n.x+CARD_W, y1=n.y+n.h/2, x2=c.x, y2=c.y+c.h/2, mx=(x1+x2)/2;
+        const p=document.createElementNS(NS,'path');
+        p.setAttribute('d',`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+        p.setAttribute('fill','none');
+        p.setAttribute('stroke',c.accent);
+        p.setAttribute('stroke-width','2');
+        p.setAttribute('stroke-opacity','.55');
+        S.appendChild(p);
+        walk(c);
+      });
+    })(root);
+  }
+
+  function render(){
+    rendered=true;
+    C.innerHTML=''; elMap.clear();
+    (function walk(n){ const el=makeCard(n); C.appendChild(el); elMap.set(n.id,el);
+      if(n.expanded) n.children.forEach(walk); })(root);
+    refEl=makeRef(); C.appendChild(refEl);
+
+    const measure=n=>{ const el=elMap.get(n.id); n.h=el?el.offsetHeight:60; n.w=CARD_W;
+      if(n.expanded) n.children.forEach(measure); };
+    measure(root);
+    const refH=refEl.offsetHeight;
+
+    // layout — depth offset +1 so the reference card occupies column 0
+    let cursor=0;
+    (function place(n,depth){
+      n.x=(depth+1)*COL_W;
+      const kids=n.expanded?n.children:[];
+      if(!kids.length){ n.y=cursor; cursor+=n.h+V_GAP; }
+      else { kids.forEach(k=>place(k,depth+1));
+        const f=kids[0], l=kids[kids.length-1];
+        n.y=(f.y+f.h/2+l.y+l.h/2)/2 - n.h/2; }
+    })(root,0);
+
+    // normalize tree top to 0, then vertically center tree vs. reference card
+    let minY=Infinity,maxX=0,maxYb=0;
+    const scan=n=>{ minY=Math.min(minY,n.y); maxYb=Math.max(maxYb,n.y+n.h);
+      maxX=Math.max(maxX,n.x+CARD_W); if(n.expanded) n.children.forEach(scan); };
+    scan(root);
+    const shift = -minY;
+    const treeH = maxYb+shift;
+    const totalH = Math.max(treeH, refH);
+    const treeOff = shift + (totalH-treeH)/2;
+    const apply=n=>{ n.y+=treeOff; if(n.expanded) n.children.forEach(apply); };
+    apply(root);
+
+    const pos=n=>{ const el=elMap.get(n.id); el.style.left=n.x+'px'; el.style.top=n.y+'px';
+      if(n.expanded) n.children.forEach(pos); };
+    pos(root);
+    refEl.style.left='0px'; refEl.style.top=((totalH-refH)/2)+'px';
+
+    S.setAttribute('width',maxX+40); S.setAttribute('height',totalH+40);
+    S.style.width=(maxX+40)+'px'; S.style.height=(totalH+40)+'px';
+    drawLinks();
+
+    if(firstRun){ firstRun=false; ty=Math.max(20,(V.clientHeight-totalH)/2); applyTransform(); }
+  }
+
+  function applyTransform(){ W.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; }
+
+  /* ---- Pan ---- */
+  let panning=false,sx=0,sy=0,stx=0,sty=0;
+  V.addEventListener('mousedown',e=>{ if(e.target.closest('.card'))return;
+    panning=true;sx=e.clientX;sy=e.clientY;stx=tx;sty=ty;V.classList.add('panning'); });
+  window.addEventListener('mousemove',e=>{ if(!panning)return;
+    tx=stx+(e.clientX-sx); ty=sty+(e.clientY-sy); applyTransform(); });
+  window.addEventListener('mouseup',()=>{ panning=false; V.classList.remove('panning'); });
+
+  /* ---- Zoom (proportional, dampened — matches opener) ---- */
+  function zoomAt(f,cx,cy){ const ns=Math.min(1.7,Math.max(0.35,scale*f)); const k=ns/scale;
+    tx=cx-(cx-tx)*k; ty=cy-(cy-ty)*k; scale=ns; applyTransform(); }
+  V.addEventListener('wheel',e=>{ e.preventDefault(); const r=V.getBoundingClientRect();
+    const d=Math.max(-60,Math.min(60,e.deltaY)); zoomAt(Math.exp(-d*0.0022),e.clientX-r.left,e.clientY-r.top);
+  },{passive:false});
+
+  /* ---- Controls ---- */
+  document.getElementById('objExpandAll').onclick=()=>{
+    (function w(n){ if(n.children.length)n.expanded=true; n.children.forEach(w); })(root);
+    root.expanded=true; render(); };
+  document.getElementById('objCollapseAll').onclick=()=>{
+    (function w(n){ if(n.children.length)n.expanded=false; n.children.forEach(w); })(root);
+    root.expanded=true; root.children.forEach(t=>t.expanded=false); render(); };
+  document.getElementById('objZoomIn').onclick =()=>zoomAt(1.15, V.clientWidth/2, V.clientHeight/2);
+  document.getElementById('objZoomOut').onclick=()=>zoomAt(1/1.15, V.clientWidth/2, V.clientHeight/2);
+  document.getElementById('objReset').onclick  =()=>{ scale=1; tx=80; firstRun=true; render(); };
+
+  // Render lazily on first view (heights must be measured while visible)
+  return { ensure(){ if(!rendered) render(); } };
+})();
+
+
+/* ================================================================== */
+/* ======================== CLOSING MODULE ========================= */
+/* Independent engine — its own scope, DOM containers, and state.     */
+/* Does not touch the opener, midgame, or objections engines above.   */
+/* Two static reference cards: the Closing Formula sits at column 0;  */
+/* "What Kills the Close" is anchored one column past the tree.       */
+/* ================================================================== */
+const Closing = (function(){
+
+  /* =============================================================== */
+  /* ==================== CLOSING DATA (edit here) ================= */
+  /* TRACK 1 (The Ask): ask cards show frequency + conversion inline */
+  /*   and expand into rep-attributed phrasings (green). A readiness */
+  /*   probe (amber) leads the track. TRACK 2 (After the Ask):       */
+  /*   scenario headers — red = soft-no handling, green = closing    */
+  /*   action — expand into move steps + a key insight or failure.   */
+  /* =============================================================== */
+
+  // ---- Track 1: readiness gate ----
+  const READINESS = {
+    text:`The prospect is ready when they ask YOU a question about GovWell. When they ask about product, pricing, or process — that's the signal. Transition to the ask immediately and stop pitching once the signal is given.`,
+    list:[
+      `"Do you have a sense of how the cost compares to [vendor]?"`,
+      `"What does that look like? How long is the meeting?"`,
+      `"How much does your system cost?"`,
+      `"Does your system do [specific capability]?"`,
+    ]
+  };
+
+  // ---- Track 1: the four meeting asks ----
+  const ASKS = [
+    { num:'1', title:'15-Minute Intro Call',
+      freq:`~60% of asks · dominant`, conv:`~40–50% booked`,
+      whenLabel:`Why it works`,
+      when:`Explicitly stating what WON'T happen ("not a demo right away") removes the prospect's biggest fear.`,
+      phrasings:[
+        { who:`Best-in-class`, quote:`"Typically what we do is set up a fifteen-minute introductory call. We're not gonna set you up with a demo right away or anything like that — we don't wanna waste anyone's time. In fifteen minutes we can show you a bit of the software, you can get a sense of if this seems interesting, and we'll give you a sense of the price. Would that work?"` },
+        { who:`Best-in-class`, quote:`"To kinda see if we were a good fit, we'd do a fifteen, twenty-min intro call. Is that something you'd be able to set up?"` },
+      ] },
+
+    { num:'2', title:'Quote / Pricing Call',
+      freq:`~15% of asks`, conv:`~55–65% booked`,
+      whenLabel:`When`,
+      when:`Any time they mention cost or budget, or ask "how much?" — frame the meeting around getting them a real number. Highest-converting ask in the dataset.`,
+      phrasings:[
+        { who:`Best-in-class`, quote:`"We can probably get you a number in fifteen to twenty minutes because our product has a couple different modules and it depends on volume. We usually set up a fifteen-min call with a product specialist and they'll be able to get you that number. Would you be open to that?"` },
+        { who:`Best-in-class`, quote:`"Usually what we do is — to get an accurate quote, we do a fifteen-min call with the product expert, and they can understand your situation a little bit. And then from there they can help figure out if it makes sense to do a demo."` },
+        { who:`Best-in-class`, quote:`"Would you be open to setting up fifteen minutes so we can even be upfront with you about a price quote?"` },
+      ] },
+
+    { num:'3', title:'Back-Pocket / Future Reference',
+      freq:`~10% of asks`, conv:`~25–35% booked`,
+      whenLabel:`When`,
+      when:`Prospect is happy with their current system or not actively looking. Frames the meeting as preparation, not evaluation.`,
+      phrasings:[
+        { who:`Best-in-class`, quote:`"In the interim, if you're available for that short fifteen, twenty-min introductory call to kinda see if we would be a better fit — just to have in your back pocket when the time comes."` },
+        { who:`Best-in-class`, quote:`"We'll set up a fifteen-min intro call with somebody on our product team who can give you that quote to know what that would look like — even if it's not right now, in the future."` },
+      ] },
+
+    { num:'4', title:'Budget-Planning',
+      freq:`~8% of asks`, conv:`~50–60% booked`,
+      whenLabel:`When`,
+      when:`Prospect cited budget as the reason not to meet. Repositions the meeting from "evaluate now" to "prepare your budget request."`,
+      phrasings:[
+        { who:`Best-in-class → booked`, quote:`"With the budget concern, if it is something you're looking to implement, we sometimes work on an eighteen-month timeline so that people can prepare budgets down the line. That is a fifteen to twenty-minute call if that's of interest to you."` },
+        { who:`Best-in-class`, quote:`"When going into the budgeting process, the people that have a directional sense of what they're looking for usually have a little bit of an edge getting what they want in those conversations."` },
+      ] },
+  ];
+
+  // ---- Track 2: after-the-ask scenarios ----
+  const SCENARIOS = [
+    { tone:'handle', tag:'Soft no', title:`Handling "Send Me an Email First"`,
+      moveLabel:`The move`,
+      steps:[
+        `Accept partially — "Totally, I'll send that over."`,
+        `Micro-commit before hanging up — "Just so I send the right thing and not a generic blast — are you mainly on [vendor] for permitting, or using it across inspections and code too?"`,
+        `Plant a hook — "I'll include a one-pager on how [specific workflow] compares. Most folks on [vendor] tell me that's the page that surprised them."`,
+      ],
+      fail:`Asking "what's your email?" immediately and ending the call — the email goes unread and there's no established reason to follow up.` },
+
+    { tone:'handle', tag:'Soft no', title:`Handling "Not Right Now / Call Back Later"`,
+      moveLabel:`The move`,
+      steps:[
+        `Get a specific date, not a season — "Is there a specific month that tends to be better — after budget season, after a project wraps?"`,
+        `Make the callback conditional — "I'll reach out in [month]. Is there anything I can send in the meantime that would make that conversation more useful?"`,
+        `Calendar placeholder attempt — "Maybe I'll find a hold time for now; if you're not interested you could always decline it."`,
+      ],
+      fail:`Generic "I'll call back in the fall" with no anchor date and no defined reason to reconnect.` },
+
+    { tone:'do', tag:'On the yes', title:`Confirming a Booked Meeting`,
+      moveLabel:`Before you hang up — do all of these`,
+      steps:[
+        `Confirm the time verbally — "So Friday at 2PM Central?"`,
+        `Send the calendar invite while still on the phone.`,
+        `Ask them to confirm receipt — "Would you mind taking a look to see if you got that invite?" (strongest no-show prevention in the dataset)`,
+        `Name the AE — "It'll be with my colleague [Name]."`,
+        `Set expectations — "They handle the pricing side and can walk you through how [specific workflow] works."`,
+      ],
+      insight:`Reps who confirm invite receipt live have significantly lower no-show rates. Reps who leave scheduling to a follow-up email almost never convert.` },
+
+    { tone:'do', tag:'No meeting', title:`The Clean Exit (No Meeting Booked)`,
+      moveLabel:`Best practice`,
+      steps:[
+        `Establish a specific callback date, not a vague timeframe.`,
+        `Name the trigger — "I'll reach back out after your budget season wraps," or "I'll put a note for [specific month]."`,
+        `Leave them one concrete data point — "I'll send you a one-pager on how [specific workflow] works, just so you have it when the timing's right."`,
+      ],
+      fail:`"I'll send you an email and we can go from there" with no date and no reason to reconnect — effectively lost pipeline.` },
+  ];
+  /* ===================== END CLOSING DATA ======================= */
+
+  /* ---- Build tree: start -> 2 tracks -> children ---- */
+  let _id=0;
+  const mk = p => Object.assign({id:'c'+(_id++),children:[],expanded:false},p);
+  const root = mk({type:'start',expanded:true,accent:'#41AAEB'});
+
+  const t1 = mk({type:'track',accent:'#41AAEB',num:'T1',title:'The Ask',
+                 subtitle:'How to frame and deliver the meeting request.'});
+  t1.children.push(mk({type:'move',probe:true,accent:'#FEAF0E',
+    label:'Readiness signals — when to pull the trigger', text:READINESS.text, list:READINESS.list}));
+  ASKS.forEach(a=>{
+    const an = mk({type:'ask',accent:'#41AAEB',num:a.num,title:a.title,
+                   freq:a.freq,conv:a.conv,whenLabel:a.whenLabel,when:a.when});
+    a.phrasings.forEach(p=> an.children.push(mk({type:'move',accent:'#39C25E',label:p.who,text:p.quote})));
+    t1.children.push(an);
+  });
+  root.children.push(t1);
+
+  const t2 = mk({type:'track',accent:'#f0883e',num:'T2',title:'After the Ask',
+                 subtitle:'Handle soft nos, confirm bookings, exit cleanly.'});
+  SCENARIOS.forEach(s=>{
+    const sn = mk({type:'scenario',tone:s.tone,tag:s.tag,title:s.title,
+                   accent:s.tone==='handle'?'#8b3a3a':'#39C25E'});
+    sn.children.push(mk({type:'move',accent:'#39C25E',label:s.moveLabel,steps:s.steps}));
+    if(s.insight) sn.children.push(mk({type:'move',accent:'#39C25E',label:'Key insight',text:s.insight}));
+    if(s.fail)    sn.children.push(mk({type:'move',probe:true,accent:'#FEAF0E',label:'Failure mode',text:s.fail}));
+    t2.children.push(sn);
+  });
+  root.children.push(t2);
+
+  /* ---- DOM + constants ---- */
+  const V=document.getElementById('viewportClose');
+  const W=document.getElementById('worldClose');
+  const C=document.getElementById('cardsClose');
+  const S=document.getElementById('linksClose');
+  const NS='http://www.w3.org/2000/svg';
+  const CARD_W=272, COL_W=372, V_GAP=20;
+  let tx=80, ty=0, scale=1, firstRun=true, rendered=false;
+  const elMap=new Map();
+
+  function makeCard(n){
+    const el=document.createElement('div');
+    const kids=n.children.length;
+    const pill = kids?`<span class="pill">${n.expanded?'▾':'▸ '+kids}</span>`:'';
+    if(n.type==='start'){
+      el.className='card start';
+      el.innerHTML=`<div class="big">✅ Closing</div><div class="hint">Pick a track →</div>`;
+    } else if(n.type==='track'){
+      el.className='card track'+(kids?' has':'');
+      el.style.setProperty('--accent',n.accent);
+      el.innerHTML=`
+        <div class="top"><span class="num">${n.num}</span><span class="title">${n.title}</span>${pill}</div>
+        <div class="usewhen">${n.subtitle}</div>`;
+    } else if(n.type==='ask'){
+      el.className='card ask'+(kids?' has':'');
+      el.style.setProperty('--accent',n.accent);
+      el.innerHTML=`
+        <div class="top"><span class="num">${n.num}</span><span class="title">${n.title}</span>${pill}</div>
+        <div class="askmeta"><span class="freqchip">${n.freq}</span><span class="convchip">${n.conv}</span></div>
+        <div class="asknote"><b>${n.whenLabel}:</b> ${n.when}</div>`;
+    } else if(n.type==='scenario'){
+      el.className='card scenario '+n.tone+(kids?' has':'');
+      el.style.setProperty('--accent',n.accent);
+      el.innerHTML=`
+        <div class="top"><span class="label">${n.tag}</span>${pill}</div>
+        <div class="scentitle">${n.title}</div>`;
+    } else { // move: steps, phrasing/text, readiness list, insight, or failure probe
+      el.className='card move'+(n.probe?' probe':'');
+      el.style.setProperty('--accent',n.accent);
+      let body;
+      if(n.steps){ body='<ol>'+n.steps.map(s=>`<li>${s}</li>`).join('')+'</ol>'; }
+      else { body=`<div class="body">${n.text||''}</div>`;
+        if(n.list) body+='<ul class="qlist">'+n.list.map(li=>`<li>${li}</li>`).join('')+'</ul>';
+        if(n.outcome) body+=`<div class="exoutcome">↳ ${n.outcome}</div>`; }
+      el.innerHTML=`<div class="top"><span class="label">${n.label}</span></div>${body}`;
+    }
+    el.addEventListener('click',()=>{
+      if(!n.children.length) return;
+      const sel=window.getSelection(); if(sel&&!sel.isCollapsed) return;
+      n.expanded=!n.expanded; render();
+    });
+    return el;
+  }
+
+  /* Static reference card: the closing formula (column 0) */
+  function makeFormula(){
+    const el=document.createElement('div');
+    el.className='card refcard';
+    el.innerHTML=`
+      <div class="top"><span class="label">🎯 The Closing Formula</span></div>
+      <div class="refsub">Highest conversion rate in the dataset</div>
+      <div class="refflow">[Pain acknowledgment] → [Transparency about your role] → [Upgrade to expert] → [Specific time] → [Direct question]</div>
+      <div class="refbody">"It sounds like [specific pain]. I'm not the product expert, but the person I'd connect you with specializes in [their workflow] and can show you exactly how that works — plus give you a sense of pricing. We can do that in fifteen minutes. Would [specific day] work?"</div>
+      <div class="refrules"><b>Core rules</b>
+        <ul>
+          <li>Never ask before establishing pain.</li>
+          <li>Never pitch features before asking — you eliminate their reason to attend.</li>
+          <li>"Fifteen minutes" is the magic number — use it every time.</li>
+          <li>Move to scheduling immediately on any yes — meetings booked on the call show up; "follow up to schedule" don't.</li>
+          <li>Always name the AE who will be on the call.</li>
+        </ul>
+      </div>`;
+    return el;
+  }
+
+  /* Static reference card: what kills the close (anchored at the far right) */
+  function makeKills(){
+    const el=document.createElement('div');
+    el.className='card refcard';
+    el.innerHTML=`
+      <div class="top"><span class="label">⛔ What Kills the Close</span></div>
+      <ol>
+        <li><b>Asking before pain is established</b> — prospect has no reason to say yes.</li>
+        <li><b>Pitching features instead of asking</b> — eliminates their reason to attend.</li>
+        <li><b>Tentative language</b> — "would you maybe possibly want to..." signals the rep doesn't believe the meeting is worth their time.</li>
+        <li><b>Never asking at all</b> — calls that end with "I'll send an email" never convert.</li>
+        <li><b>Leaving scheduling to a follow-up</b> — if it's not on the calendar before you hang up, it probably won't be.</li>
+      </ol>`;
+    return el;
+  }
+
+  function drawLinks(){
+    while(S.firstChild) S.removeChild(S.firstChild);
+    (function walk(n){
+      if(!n.expanded) return;
+      n.children.forEach(c=>{
+        const x1=n.x+CARD_W, y1=n.y+n.h/2, x2=c.x, y2=c.y+c.h/2, mx=(x1+x2)/2;
+        const p=document.createElementNS(NS,'path');
+        p.setAttribute('d',`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+        p.setAttribute('fill','none');
+        p.setAttribute('stroke',c.accent);
+        p.setAttribute('stroke-width','2');
+        p.setAttribute('stroke-opacity','.55');
+        S.appendChild(p);
+        walk(c);
+      });
+    })(root);
+  }
+
+  function render(){
+    rendered=true;
+    C.innerHTML=''; elMap.clear();
+    (function walk(n){ const el=makeCard(n); C.appendChild(el); elMap.set(n.id,el);
+      if(n.expanded) n.children.forEach(walk); })(root);
+    const formulaEl=makeFormula(); C.appendChild(formulaEl);
+    const killsEl=makeKills();     C.appendChild(killsEl);
+
+    const measure=n=>{ const el=elMap.get(n.id); n.h=el?el.offsetHeight:60; n.w=CARD_W;
+      if(n.expanded) n.children.forEach(measure); };
+    measure(root);
+    const formulaH=formulaEl.offsetHeight, killsH=killsEl.offsetHeight;
+
+    // layout — depth offset +1 so the formula card occupies column 0
+    let cursor=0;
+    (function place(n,depth){
+      n.x=(depth+1)*COL_W;
+      const kids=n.expanded?n.children:[];
+      if(!kids.length){ n.y=cursor; cursor+=n.h+V_GAP; }
+      else { kids.forEach(k=>place(k,depth+1));
+        const f=kids[0], l=kids[kids.length-1];
+        n.y=(f.y+f.h/2+l.y+l.h/2)/2 - n.h/2; }
+    })(root,0);
+
+    // normalize tree top to 0, then vertically center tree vs. both static cards
+    let minY=Infinity,maxNodeX=0,maxYb=0;
+    const scan=n=>{ minY=Math.min(minY,n.y); maxYb=Math.max(maxYb,n.y+n.h);
+      maxNodeX=Math.max(maxNodeX,n.x); if(n.expanded) n.children.forEach(scan); };
+    scan(root);
+    const shift=-minY;
+    const treeH=maxYb+shift;
+    const totalH=Math.max(treeH,formulaH,killsH);
+    const treeOff=shift+(totalH-treeH)/2;
+    const apply=n=>{ n.y+=treeOff; if(n.expanded) n.children.forEach(apply); };
+    apply(root);
+
+    const pos=n=>{ const el=elMap.get(n.id); el.style.left=n.x+'px'; el.style.top=n.y+'px';
+      if(n.expanded) n.children.forEach(pos); };
+    pos(root);
+
+    // formula at column 0; "what kills the close" one column past the rightmost node
+    formulaEl.style.left='0px'; formulaEl.style.top=((totalH-formulaH)/2)+'px';
+    const endX=maxNodeX+COL_W;
+    killsEl.style.left=endX+'px'; killsEl.style.top=((totalH-killsH)/2)+'px';
+
+    const finalMaxX=endX+CARD_W;
+    S.setAttribute('width',finalMaxX+40); S.setAttribute('height',totalH+40);
+    S.style.width=(finalMaxX+40)+'px'; S.style.height=(totalH+40)+'px';
+    drawLinks();
+
+    if(firstRun){ firstRun=false; ty=Math.max(20,(V.clientHeight-totalH)/2); applyTransform(); }
+  }
+
+  function applyTransform(){ W.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`; }
+
+  /* ---- Pan ---- */
+  let panning=false,sx=0,sy=0,stx=0,sty=0;
+  V.addEventListener('mousedown',e=>{ if(e.target.closest('.card'))return;
+    panning=true;sx=e.clientX;sy=e.clientY;stx=tx;sty=ty;V.classList.add('panning'); });
+  window.addEventListener('mousemove',e=>{ if(!panning)return;
+    tx=stx+(e.clientX-sx); ty=sty+(e.clientY-sy); applyTransform(); });
+  window.addEventListener('mouseup',()=>{ panning=false; V.classList.remove('panning'); });
+
+  /* ---- Zoom (proportional, dampened — matches opener) ---- */
+  function zoomAt(f,cx,cy){ const ns=Math.min(1.7,Math.max(0.35,scale*f)); const k=ns/scale;
+    tx=cx-(cx-tx)*k; ty=cy-(cy-ty)*k; scale=ns; applyTransform(); }
+  V.addEventListener('wheel',e=>{ e.preventDefault(); const r=V.getBoundingClientRect();
+    const d=Math.max(-60,Math.min(60,e.deltaY)); zoomAt(Math.exp(-d*0.0022),e.clientX-r.left,e.clientY-r.top);
+  },{passive:false});
+
+  /* ---- Controls ---- */
+  document.getElementById('closeExpandAll').onclick=()=>{
+    (function w(n){ if(n.children.length)n.expanded=true; n.children.forEach(w); })(root);
+    root.expanded=true; render(); };
+  document.getElementById('closeCollapseAll').onclick=()=>{
+    (function w(n){ if(n.children.length)n.expanded=false; n.children.forEach(w); })(root);
+    root.expanded=true; root.children.forEach(t=>t.expanded=false); render(); };
+  document.getElementById('closeZoomIn').onclick =()=>zoomAt(1.15, V.clientWidth/2, V.clientHeight/2);
+  document.getElementById('closeZoomOut').onclick=()=>zoomAt(1/1.15, V.clientWidth/2, V.clientHeight/2);
+  document.getElementById('closeReset').onclick  =()=>{ scale=1; tx=80; firstRun=true; render(); };
+
+  // Render lazily on first view (heights must be measured while visible)
+  return { ensure(){ if(!rendered) render(); } };
+})();
+
+
+/* ============================== TABS ============================== */
+(function(){
+  // Each tab: button, its canvas, its control group, and an optional
+  // lazy-render hook (modules render on first view, while visible).
+  const tabs = [
+    { btn:'tabOpener', vp:'viewport',      ctl:'ctlsOpener', ensure:null },
+    { btn:'tabMid',    vp:'viewportMid',   ctl:'ctlsMid',    ensure:()=>Midgame.ensure() },
+    { btn:'tabObj',    vp:'viewportObj',   ctl:'ctlsObj',    ensure:()=>Objections.ensure() },
+    { btn:'tabClose',  vp:'viewportClose', ctl:'ctlsClose',  ensure:()=>Closing.ensure() },
+  ].map(t=>({ ...t,
+    btnEl:document.getElementById(t.btn),
+    vpEl :document.getElementById(t.vp),
+    ctlEl:document.getElementById(t.ctl) }));
+
+  function activate(active){
+    tabs.forEach(t=>{
+      const on = (t===active);
+      t.btnEl.classList.toggle('active', on);
+      t.vpEl.style.display  = on ? '' : 'none';
+      t.ctlEl.style.display = on ? '' : 'none';
+    });
+    if(active.ensure) active.ensure();
+  }
+  tabs.forEach(t=> t.btnEl.onclick=()=>activate(t));
+})();
+
+
+/* ================================================================== */
+/* ======================== FEEDBACK MODULE ======================== */
+/* Lets reps click any card and leave an edit/suggestion/comment.     */
+/* Submissions POST to a Google Sheet via an Apps Script web app.     */
+/* Hooks onto cards via a DOM observer — no changes to module render. */
+/* ================================================================== */
+(function(){
+
+  /* ⬇⬇⬇  PASTE your Google Apps Script Web App URL between the quotes  ⬇⬇⬇ */
+  /*       (looks like https://script.google.com/macros/s/AKfy...../exec )   */
+  const FEEDBACK_ENDPOINT = "https://script.google.com/macros/s/AKfycby_PVyWyxaZpaLUlYRqb4wDrsXoQg31M4uBnw7R01QHna7KaANrwQa8bbQNjGz0sKfjfw/exec";
+  /* ⬆⬆⬆  Until this is set, feedback is saved to the rep's browser only.   ⬆⬆⬆ */
+
+  const TAB_BY_CONTAINER = { cards:'Opener', cardsMid:'Midgame', cardsObj:'Objections', cardsClose:'Closing' };
+  const CHAT = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.38 8.38 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>';
+
+  /* ---- modal + toast (injected once) ---- */
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="fb-overlay" id="fbOverlay" hidden>
+      <div class="fb-modal">
+        <div class="fb-head">Suggest an edit · leave feedback</div>
+        <div class="fb-ctx" id="fbCtx"></div>
+        <div class="fb-types" id="fbTypes">
+          <button type="button" data-t="Suggest edit" class="active">Suggest edit</button>
+          <button type="button" data-t="Add new">Add new</button>
+          <button type="button" data-t="Comment">Comment</button>
+        </div>
+        <textarea id="fbText" placeholder="What would you change, add, or flag? Be specific."></textarea>
+        <input id="fbRep" placeholder="Your name" />
+        <div class="fb-actions">
+          <button type="button" id="fbCancel" class="fb-btn-ghost">Cancel</button>
+          <button type="button" id="fbSend" class="fb-btn-primary">Send feedback</button>
+        </div>
+        <div class="fb-note" id="fbNote"></div>
+      </div>
+    </div>
+    <div class="fb-toast" id="fbToast"></div>
+  `);
+
+  const overlay=document.getElementById('fbOverlay');
+  const ctxEl=document.getElementById('fbCtx');
+  const typesEl=document.getElementById('fbTypes');
+  const textEl=document.getElementById('fbText');
+  const repEl=document.getElementById('fbRep');
+  const noteEl=document.getElementById('fbNote');
+  const toast=document.getElementById('fbToast');
+  let cur={tab:'',card:''}, type='Suggest edit';
+
+  repEl.value = localStorage.getItem('gw_fb_rep') || '';
+
+  typesEl.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
+    type=b.dataset.t; [...typesEl.children].forEach(x=>x.classList.toggle('active',x===b)); });
+
+  function open(ctx){ cur=ctx; type='Suggest edit';
+    [...typesEl.children].forEach((x,i)=>x.classList.toggle('active',i===0));
+    ctxEl.textContent = ctx.tab + (ctx.card?'  ·  '+ctx.card:'');
+    textEl.value=''; noteEl.textContent=''; overlay.hidden=false; setTimeout(()=>textEl.focus(),30); }
+  function close(){ overlay.hidden=true; }
+
+  document.getElementById('fbCancel').onclick=close;
+  overlay.addEventListener('click',e=>{ if(e.target===overlay) close(); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!overlay.hidden) close(); });
+
+  function showToast(msg){ toast.textContent=msg; toast.classList.add('show');
+    setTimeout(()=>toast.classList.remove('show'),2400); }
+
+  document.getElementById('fbSend').onclick=async ()=>{
+    const suggestion=textEl.value.trim();
+    if(!suggestion){ noteEl.textContent='Please type your feedback first.'; textEl.focus(); return; }
+    const rep=repEl.value.trim();
+    localStorage.setItem('gw_fb_rep', rep);
+    const payload={ ts:new Date().toISOString(), rep, tab:cur.tab, card:cur.card, type, suggestion };
+    // mirror locally so the rep keeps a record of what they submitted
+    try{ const log=JSON.parse(localStorage.getItem('gw_fb_log')||'[]'); log.push(payload);
+      localStorage.setItem('gw_fb_log', JSON.stringify(log)); }catch(_){}
+    if(FEEDBACK_ENDPOINT){
+      try{ await fetch(FEEDBACK_ENDPOINT,{method:'POST',mode:'no-cors',
+        headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload)}); }
+      catch(_){ /* no-cors is fire-and-forget; ignore opaque/network result */ }
+      showToast('✓ Feedback sent — thank you!');
+    } else {
+      showToast('✓ Saved locally (endpoint not set yet)');
+    }
+    close();
+  };
+
+  /* ---- decorate every card with a feedback button (observer = no render edits) ---- */
+  function deriveLabel(card){
+    const num=card.querySelector('.num');
+    const t=card.querySelector('.title, .scentitle');
+    if(t) return (num?num.textContent.trim()+' ':'')+t.textContent.trim();
+    const big=card.querySelector('.big'); if(big) return big.textContent.trim();
+    const lab=card.querySelector('.label'); if(lab) return lab.textContent.trim();
+    return 'Card';
+  }
+  function decorate(){
+    document.querySelectorAll('#cards .card, #cardsMid .card, #cardsObj .card, #cardsClose .card').forEach(card=>{
+      if(card.classList.contains('start')) return;     // skip navigation-only cards
+      if(card.querySelector('.fbbtn')) return;
+      const btn=document.createElement('button'); btn.type='button'; btn.className='fbbtn';
+      btn.title='Suggest an edit or leave a comment'; btn.innerHTML=CHAT;
+      (card.querySelector(':scope > .top') || card).appendChild(btn);
+      card.dataset.fb=deriveLabel(card);
+    });
+  }
+  ['cards','cardsMid','cardsObj','cardsClose'].forEach(id=>{
+    const c=document.getElementById(id);
+    if(c) new MutationObserver(decorate).observe(c,{childList:true});
+  });
+  decorate();
+
+  // capture phase so the feedback button never triggers a card expand/collapse
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('.fbbtn'); if(!b) return;
+    e.stopPropagation(); e.preventDefault();
+    const card=b.closest('.card');
+    const cont=b.closest('#cards,#cardsMid,#cardsObj,#cardsClose');
+    open({ tab: TAB_BY_CONTAINER[cont&&cont.id]||'', card:(card&&card.dataset.fb)||'' });
+  }, true);
+})();
+</script>
+</body>
+</html>
